@@ -38,5 +38,13 @@
     "web": "expo start --web",
     "lint": "expo lint"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "expo-router": {
+      "ajv": "^8.20.0",
+      "ajv-keywords": {
+        "ajv": "^8.20.0"
+      }
+    }
+  }
 }
