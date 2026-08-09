@@ -135,13 +135,15 @@ Navigasyonun kendisini (turn-by-turn sesli yönlendirme, harita render'ı) **yen
 - Google Routes API entegrasyonu (leg-by-leg hesaplama).
 - Apple Maps / Google Maps'e deep-link ile navigasyon devri.
 - Temel kullanıcı arayüzü (React Native + Expo).
+- **Temel araç profili** (marka/model/yakıt tipi/tüketim kaydı, isabetli yakıt/enerji maliyeti hesabı — bkz. Bölüm 20).
+- **Temel gerçekleşen gider takibi** (yolculuk sonunda GPS bazlı otomatik gerçek maliyet/tüketim özeti — bkz. Bölüm 21).
 
 ### V2
 - Smart Departure (ne zaman çıkmalıyım + güven yüzdesi).
 - Smart Stop Order (durak sırasını AI'nin belirlemesi, zaman penceresi destekli).
 - Dynamic Replanning (yolda trafik değişince rota/durak sırası güncelleme).
 - Route-aware Places (rota üzeri POI arama, kısıtlı sapma).
-- Park yeri optimizasyonu.
+- Park yeri optimizasyonu (elektrikli araçlarda şarj imkânlı otopark önceliklendirmesi dahil).
 - Doğal dil ile durak girişi (AI parse).
 
 ### V3
@@ -149,8 +151,11 @@ Navigasyonun kendisini (turn-by-turn sesli yönlendirme, harita render'ı) **yen
 - Kişisel sürüş profili öğrenme (personalization engine).
 - ETA confidence / güvenilirlik skoru.
 - Deadline bazlı çıkış saati + risk buffer.
+- **EV menzil ve otomatik şarj molası planlaması** (bkz. Bölüm 20.4).
+- **Erişim kısıtı farkındalığı** (düşük emisyon bölgesi, boyut/ağırlık kısıtlı yol — öncelikle B2B ticari araç senaryosu, bkz. Bölüm 20.5).
+- **Gelişmiş gider takibi ve tahmin kalibrasyonu** (odometre/fiş girişiyle hassas maliyet, gider geçmişi/istatistik ekranı, aracın gerçek tüketimine göre otomatik kalibrasyon önerisi — bkz. Bölüm 21).
 - Sosyal/carpool modülü (opsiyonel).
-- B2B panel: saha ekibi rota ataması ve yönetim ekranı.
+- B2B panel: saha ekibi rota ataması ve yönetim ekranı (araç filosu profilleriyle entegre).
 
 ---
 
@@ -463,7 +468,7 @@ route_feedback — kullanıcının seçtiği/reddettiği plan geri bildirimi (V3
 | email | varchar, unique | |
 | password_hash | varchar | |
 | full_name | varchar | |
-| default_vehicle_type | varchar | `gasoline`, `diesel`, `electric`, `hybrid` |
+| default_vehicle_type | varchar | Geriye dönük uyumluluk için basit alan (`gasoline`, `diesel`, `electric`, `hybrid`); kullanıcı detaylı araç eklerse asıl kaynak `vehicles` tablosudur (bkz. Bölüm 20) |
 | created_at | timestamp | |
 
 **`user_preferences`**
@@ -643,9 +648,13 @@ PUT    /api/v1/preferences
     "avoidTolls": false,
     "avoidHighways": false
   },
-  "vehicleType": "gasoline"
+  "vehicleType": "gasoline",
+  "vehicleId": "uuid-or-null",
+  "currentStateOfChargePercent": null
 }
 ```
+
+> Not: `vehicleType` alanı geriye dönük uyumluluk için korunur (kullanıcı henüz araç eklememişse kaba kategori olarak kullanılır). Kullanıcı `vehicles` tablosunda kayıtlı bir araca sahipse `vehicleId` gönderilir ve maliyet/menzil hesapları o aracın gerçek verileriyle yapılır — detay için Bölüm 20.
 
 **Response**
 ```json
@@ -791,7 +800,7 @@ public interface RoutingProvider {
 }
 ```
 
-`RouteOptions` içinde: `avoidTolls`, `avoidHighways`, `vehicleType` (eco-route için), `departureTime`, `trafficModel` (`BEST_GUESS`, `OPTIMISTIC`, `PESSIMISTIC`).
+`RouteOptions` içinde: `avoidTolls`, `avoidHighways`, `vehicleType` (eco-route için), `departureTime`, `trafficModel` (`BEST_GUESS`, `OPTIMISTIC`, `PESSIMISTIC`). V2/V3'te kayıtlı bir `vehicle` verilmişse, `emission_class`, `height_cm/weight_kg` gibi alanlar da (destekleniyorsa) `RouteOptions`'a eklenir — detay için Bölüm 20.5.
 
 ### 12.4 Rate Limiting ve Maliyet Kontrolü
 
@@ -1028,9 +1037,338 @@ GET /api/v1/journeys/{id}/along-route?category=fuel&max_detour_minutes=5
 - Aynı kategori için çok fazla sonuç (şehir merkezi, yoğun POI) → sapma süresine göre en iyi 5-10 sonuç sunulur, tam liste değil.
 
 ---
-## 20. Güvenlik, Gizlilik ve KVKK
+## 20. Araç Profili ve Yakıt/Menzil Yönetimi
 
-### 20.1 Veri Sınıflandırması
+### 20.1 Neden Önemli
+
+Şu ana kadarki optimizasyon `vehicleType` alanını yalnızca kaba bir kategori (`gasoline`/`diesel`/`electric`/`hybrid`) olarak kullanıyordu. Bu, yakıt maliyeti tahminini ve eco-route hesaplamasını genel geçer/ortalama değerlerle yapmaya zorluyor — gerçek aracın tükettiğinden %30-40 sapabilen kaba tahminler ortaya çıkarabiliyor. Ayrıca elektrikli araçlarda **menzil (range)** kısıtı hiç modellenmiyordu; oysa EV kullanıcısı için "bu plan aracımın menzilini aşıyor mu, yolda şarj molası gerekiyor mu" sorusu kritik.
+
+Kullanıcının aracını (marka/model/yıl, yakıt tipi, gerçek tüketim, tank/batarya kapasitesi, motor gücü, emisyon sınıfı, boyut/ağırlık) sisteme kaydetmesi, şu değer katmanlarını açar:
+
+1. **İsabetli maliyet tahmini** — genel ortalama yerine aracın gerçek tüketim değeriyle hesaplanan yakıt/enerji maliyeti.
+2. **EV menzil ve şarj molası planlaması** — toplam yolculuk mesafesi aracın menzilini aşıyorsa, rotaya otomatik şarj molası eklenmesi.
+3. **Daha doğru eco-route** — Google Routes API'nin eco-route hesaplaması motor tipine göre değişir; gerçek aracın verisiyle daha isabetli sonuç.
+4. **Erişim kısıtı farkındalığı** — düşük emisyonlu bölge (LEZ benzeri uygulamalar), ağırlık/yükseklik kısıtlı yollar gibi bazı araçları etkileyen (özellikle ticari araç/kamyonet senaryosunda, B2B saha ekibi için) kısıtların plana yansıtılması.
+5. **Toll sınıfı doğruluğu** — bazı otoyol/köprü ücretlendirmeleri araç sınıfına (2+1, kamyonet vb.) göre değişir; genel tahmin yerine araca özgü ücret hesaplanabilir.
+6. **Kişiselleştirilmiş park önerisi** — elektrikli araç kullanıcısına şarj imkânı olan otoparkların önceliklendirilmesi (V2/V3).
+
+Bu özellik hem B2C (kullanıcı kendi aracını tanımlar) hem B2B (saha ekibindeki her aracın filoya kayıtlı, farklı tüketim/kısıt profiline sahip olması) senaryosunda doğrudan kullanılabilir.
+
+### 20.2 Veri Modeli
+
+**`vehicles`** (yeni tablo, `users` ile 1-N ilişki — bir kullanıcının birden fazla aracı olabilir, `is_default` ile varsayılan araç belirlenir)
+
+| Kolon | Tip | Açıklama |
+|---|---|---|
+| id | UUID (PK) | |
+| user_id | UUID (FK) | |
+| nickname | varchar | Kullanıcının verdiği isim, örn. "Benim Civic" |
+| brand | varchar | Örn. "Honda" |
+| model | varchar | Örn. "Civic" |
+| model_year | int | |
+| fuel_type | varchar | `gasoline`, `diesel`, `lpg`, `hybrid`, `plugin_hybrid`, `electric` |
+| fuel_consumption_l_per_100km | decimal, nullable | Yakıtlı/hibrit araçlar için gerçek/beyan tüketim |
+| energy_consumption_kwh_per_100km | decimal, nullable | Elektrikli/plug-in hibrit araçlar için |
+| tank_capacity_liters | decimal, nullable | |
+| battery_capacity_kwh | decimal, nullable | Elektrikli/plug-in hibrit için |
+| usable_range_km | int, nullable | Kullanıcı tarafından girilebilir veya tüketim + kapasiteden hesaplanır |
+| charging_connector_type | varchar, nullable | `type2`, `ccs`, `chademo` vb. (V3, şarj istasyonu eşleştirmesi için) |
+| average_charging_speed_kw | decimal, nullable | Şarj molası süresi tahmini için (V3) |
+| emission_class | varchar, nullable | Örn. `euro6`, `euro5` — düşük emisyon bölgesi kısıtları için |
+| toll_class | varchar, nullable | Örn. `class1`, `class2` — otoyol/köprü ücret sınıfı |
+| height_cm / width_cm / length_cm / weight_kg | int, nullable | Ticari araç / yükseklik-ağırlık kısıtlı yol senaryoları için (öncelikle B2B) |
+| is_default | boolean | |
+| created_at / updated_at | timestamp | |
+
+`journeys` tablosuna eklenen kolon:
+
+| Kolon | Tip | Açıklama |
+|---|---|---|
+| vehicle_id | UUID (FK, nullable) | Bu yolculuk için kullanılan araç. Boşsa kullanıcının varsayılan aracı veya genel ortalama değer kullanılır. |
+
+`journey_plans` tablosuna eklenen kolonlar:
+
+| Kolon | Tip | Açıklama |
+|---|---|---|
+| estimated_energy_cost | decimal | `total_fuel_cost_estimate` alanının yerini alır/genişletir — hem yakıt hem elektrik için genel isim |
+| requires_charging_stop | boolean | EV menzil yetersizse true |
+| charging_stop_count | int, default 0 | |
+
+**`charging_stops`** (V3, plan içine otomatik eklenen şarj molaları)
+
+| Kolon | Tip | Açıklama |
+|---|---|---|
+| id | UUID (PK) | |
+| plan_id | UUID (FK) | |
+| after_leg_order | int | Hangi bacaktan sonra ekleneceği |
+| station_place_id | varchar, nullable | Places API'den bulunan şarj istasyonu |
+| estimated_charging_minutes | int | |
+| estimated_soc_arrival_percent | int | Şarj istasyonuna varıştaki tahmini batarya yüzdesi |
+
+### 20.3 Yakıt/Enerji Maliyeti Hesabı — Güncellenmiş Algoritma
+
+Bölüm 11.3'teki skorlama fonksiyonunda `TollCost + FuelCost` bileşeni artık şu şekilde hesaplanır:
+
+```
+Eğer vehicle.fuel_type in {gasoline, diesel, lpg}:
+    energy_cost = (leg_distance_km / 100) × vehicle.fuel_consumption_l_per_100km × güncel_yakıt_fiyatı
+
+Eğer vehicle.fuel_type in {electric, plugin_hybrid}:
+    energy_cost = (leg_distance_km / 100) × vehicle.energy_consumption_kwh_per_100km × güncel_elektrik_birim_fiyatı
+
+Eğer vehicle.fuel_type == hybrid (plug-in olmayan):
+    energy_cost = (leg_distance_km / 100) × vehicle.fuel_consumption_l_per_100km × güncel_yakıt_fiyatı
+    (hibrit araçlarda şehir içi/trafik yoğun segmentlerde tüketim düşüşü V3'te
+     trafficRiskScore ile çarpanlı bir düzeltme faktörüyle modellenebilir — MVP'de basit tutulur)
+
+Eğer kullanıcı hiç araç tanımlamadıysa (vehicle_id null):
+    energy_cost = genel ortalama tüketim varsayımıyla hesaplanır (mevcut MVP davranışı, geriye dönük uyumluluk için korunur)
+```
+
+Güncel yakıt/elektrik birim fiyatı, MVP'de **sabit/manuel güncellenen bir konfigürasyon değeri** olarak tutulur (`fuel_prices` tablosu veya basit config); V2/V3'te bir üçüncü parti fiyat API'siyle (örn. günlük akaryakıt fiyat servisleri) otomatikleştirilebilir. Bu, kapsam dışına taşmaması için bilinçli bir MVP sınırlaması olarak dokümante edilir.
+
+### 20.4 EV Menzil ve Şarj Molası Algoritması (V3)
+
+Bu, klasik VRPTW çözümüne ek bir kısıt katmanı ekler: **State of Charge (SoC) kısıtlı rota planlama**.
+
+```
+1. Seçilen aracın usable_range_km değeri alınır (veya battery_capacity_kwh ve
+   energy_consumption_kwh_per_100km üzerinden hesaplanır).
+2. Kullanıcının yolculuk başındaki mevcut şarj yüzdesini (SoC) sorulur
+   (varsayılan: %100, kullanıcı isterse değiştirir).
+3. Optimizasyon motorunun ürettiği her aday plan için, bacak bacak (leg-by-leg)
+   kümülatif enerji tüketimi hesaplanır:
+
+   remaining_range_km = usable_range_km × (current_soc_percent / 100)
+   for each leg in plan.legs:
+       remaining_range_km -= leg.distance_km
+       if remaining_range_km < safety_buffer_km (örn. %10 güvenlik payı):
+           BU ADAYA ŞARJ MOLASI GEREKİYOR İŞARETLE
+           break
+
+4. Şarj molası gereken adaylarda:
+   a. Menzilin biteceği bacak üzerinde, rotadan makul sapmayla (Bölüm 19'daki
+      route-aware search mantığı, kategori = "ev_charging_station") en uygun
+      şarj istasyonu aranır.
+   b. Bulunan istasyon, o bacağın ARASINA yeni bir ara durak olarak eklenir
+      (journey_stops'a sentetik bir "charging" tipi durak olarak, ya da
+      charging_stops tablosuna ayrıca kaydedilir).
+   c. Şarj süresi tahmini: (hedeflenen_soc% - istasyona_varış_soc%) / 100
+      × battery_capacity_kwh / average_charging_speed_kw × 60 (dakika)
+   d. Bu ek süre planın toplam süresine eklenir ve skorlama buna göre
+      yeniden yapılır (şarj molası gereken adaylar, gerekmeyenlere göre
+      doğal olarak zaman skorunda dezavantajlı çıkar — ekstra ceza
+      eklemeye gerek yoktur, gerçek süre farkı zaten fonksiyona yansır).
+5. Eğer rota üzerinde makul sapmada (varsayılan max 5 km) hiç şarj
+   istasyonu bulunamazsa, bu aday "gerçekleştirilemez" (infeasible)
+   olarak işaretlenir ve kullanıcıya "bu plan aracınızın menzilini aşıyor
+   ve yakınında şarj istasyonu bulunamadı" uyarısı gösterilir.
+```
+
+**MVP kapsamı notu:** Menzil/şarj molası özelliği V3'e planlanmıştır (Bölüm 28, Faz 8'e dahil edilir — bkz. güncellenmiş yol haritası). MVP'de (Faz 3) elektrikli araç seçilebilir ve enerji maliyeti hesaplanır, ancak menzil kısıtı/otomatik şarj molası **henüz devreye alınmaz**; bu, kullanıcı arayüzünde "menzil planlaması yakında" şeklinde net olarak belirtilir — sessizce eksik bırakılmaz.
+
+### 20.5 Erişim Kısıtları (Emisyon Bölgesi, Boyut/Ağırlık)
+
+V2/V3 kapsamında, `vehicle.emission_class`, `vehicle.height_cm/weight_kg` gibi alanlar doluysa, optimizasyon motoru rotayı hesaplarken bu kısıtları `RouteOptions`'a ekler (Google Routes API'nin araç boyutu/ağırlığına duyarlı rota seçeneği desteklediği ölçüde kullanılır; desteklenmeyen kısıtlar için basit bir kural tabanlı filtre — örn. bilinen düşük emisyon bölgesi poligonlarına göre segment kontrolü — uygulanabilir). Bu özellik öncelikle **B2B / ticari araç senaryosu** için değerlidir; B2C tarafında çoğu kullanıcı için bu alanlar boş kalacağı için performansa/karmaşıklığa etkisi olmaz (alanlar null ise ilgili kontrol tamamen atlanır).
+
+### 20.6 API Değişiklikleri
+
+Yeni endpoint'ler:
+```
+POST   /api/v1/vehicles                     # Yeni araç ekle
+GET    /api/v1/vehicles                     # Kullanıcının araçlarını listele
+PUT    /api/v1/vehicles/{id}                # Araç bilgisi güncelle
+DELETE /api/v1/vehicles/{id}
+PUT    /api/v1/vehicles/{id}/set-default     # Varsayılan araç olarak işaretle
+```
+
+`POST /api/v1/journeys/{id}/optimize` isteğine eklenen alan:
+```json
+{
+  "vehicleId": "uuid-or-null",
+  "currentStateOfChargePercent": 80
+}
+```
+
+`vehicleId` boş bırakılırsa, kullanıcının varsayılan aracı (varsa) otomatik kullanılır; hiç aracı yoksa Bölüm 11'deki genel ortalama tüketim davranışına düşülür (geriye dönük uyumluluk).
+
+### 20.7 Mobil Uygulama Değişiklikleri
+
+- Yeni ekran: **"Araçlarım"** (profil sekmesi altında) — araç ekleme formu (marka/model seçimi için basit bir dropdown + yıl + yakıt tipi; tüketim değeri kullanıcı biliyorsa girilir, bilmiyorsa yakıt tipine göre makul bir varsayılan değer önerilir ve kullanıcı isterse düzenler).
+- Journey Builder ekranına araç seçici eklenir (varsayılan araç otomatik seçili gelir, kullanıcı değiştirebilir).
+- Elektrikli araç seçiliyse, yolculuk başlangıcında "mevcut şarj yüzdeniz nedir?" sorusu (basit bir slider) sorulur — bu adım yakıtlı araçlarda gösterilmez.
+- Plan sonuç kartlarında, şarj molası gerektiren planlarda küçük bir 🔋 rozeti ve "1 şarj molası (~25 dk)" gibi bir not gösterilir.
+
+### 20.8 Edge Case'ler (Araç Profili)
+
+- Kullanıcı tüketim değerini bilmiyorsa/girmezse → yakıt tipine göre Türkiye'de yaygın segment ortalamaları varsayılan olarak kullanılır (örn. benzinli orta segment ~7 l/100km), ve UI'da bunun bir **tahmin** olduğu, doğruluğu artırmak için gerçek değerin girilmesinin önerildiği belirtilir.
+- Kullanıcı yolculuk sırasında aracını değiştirirse (örn. iki araçlı hane) → mevcut plan geçersiz kılınmaz otomatik ama "farklı araç seçildi, maliyet tahminleri güncel değil, yeniden optimize etmek ister misiniz?" uyarısı gösterilir.
+- Elektrikli araçta `usable_range_km` hem doğrudan girilmiş hem `battery_capacity_kwh`+`energy_consumption_kwh_per_100km`'den hesaplanabilir durumdaysa → doğrudan girilen değer önceliklidir (kullanıcının gerçek/güncel menzil tahminine genelde araç ekranından baktığı ve daha güncel olduğu varsayılır).
+- Araç silinirken bu araca bağlı geçmiş yolculuklar varsa → `journeys.vehicle_id` `NULL`'a çekilir (geçmiş kayıt bozulmaz, sadece araç referansı kalkar), araç kaydı hard-delete edilir.
+- Kullanıcı `weight_kg`/`height_cm` gibi B2B'ye özgü alanları boş bırakırsa (B2C kullanıcıların büyük çoğunluğu) → ilgili kısıt kontrolleri tamamen atlanır, herhangi bir performans/UX yükü oluşturmaz.
+- Şarj molası için makul sapmada istasyon bulunamazsa (Bölüm 20.4 adım 5) → plan "gerçekleştirilemez" olarak işaretlenir, sessizce sunulmaz.
+
+### 20.9 Test Senaryoları (Ek)
+
+- Aynı mesafe/rota için farklı `fuel_consumption_l_per_100km` değerlerine sahip iki araçla optimize edildiğinde → enerji maliyetlerinin orantılı şekilde farklı çıktığı doğrulanır.
+- `vehicle_id` verilmeden optimize edildiğinde → geriye dönük uyumlu genel ortalama davranışın hâlâ çalıştığı doğrulanır (regresyon testi).
+- EV + düşük SoC + uzun mesafe senaryosunda → `requires_charging_stop = true` ve planın süresine şarj molası süresinin eklendiği doğrulanır (mock Places API ile şarj istasyonu stub'lanır).
+- Rota üzerinde hiç şarj istasyonu bulunamayan mock senaryosunda → planın `infeasible` olarak işaretlendiği doğrulanır.
+- `height_cm`/`weight_kg` dolu bir ticari araçla, bilinen bir yükseklik kısıtlı segment testi (mock veri) → o segmentin rota adaylarından elendiği doğrulanır.
+
+---
+
+## 21. Yolculuk Sonrası Analiz ve Gider Takibi
+
+### 21.1 Amaç
+
+Bölüm 20'de anlatılan araç profili, yolculuk **öncesinde** maliyet/enerji tahmini yapmamızı sağlıyor. Bu bölüm ise yolculuk **tamamlandıktan sonra**, gerçekte ne kadar yakıt/enerji harcandığını ve gerçekte ne kadar maliyet oluştuğunu hesaplayıp kullanıcıya göstermeyi kapsar. İki önemli fayda sağlar:
+
+1. **Kullanıcıya doğrudan değer:** "Bu yolculuk sana gerçekte kaça mal oldu, ne kadar yakıt/enerji harcadın" — özellikle saha satış/kurye gibi B2B kullanıcılar için gider takibi/raporlama ihtiyacını karşılar; B2C kullanıcı için de "bu ay araca ne kadar harcadım" sorusuna cevap olur.
+2. **Sistemin kendi kendini kalibre etmesi:** Tahmin edilen (`estimated`) değerler ile gerçekleşen (`actual`) değerler karşılaştırılarak, hem genel tahmin modelinin hem de kullanıcının aracına özgü tüketim değerinin zamanla daha isabetli hale gelmesi sağlanır (bkz. 21.5).
+
+### 21.2 Veri Toplama Yöntemleri
+
+Gerçek tüketim/maliyeti üç farklı hassasiyet seviyesinde toplayabiliriz; kullanıcıya en az çaba gerektiren yöntem varsayılan olur, daha hassas yöntemler opsiyonel olarak sunulur:
+
+| Yöntem | Hassasiyet | Kullanıcı Efor | Nasıl Çalışır |
+|---|---|---|---|
+| **A — GPS bazlı otomatik tahmin** | Orta | Yok (otomatik) | Yolculuk boyunca GPS'ten ölçülen gerçek kat edilen mesafe × aracın kayıtlı tüketim oranı (`fuel_consumption_l_per_100km` / `energy_consumption_kwh_per_100km`) ile hesaplanır. Varsayılan yöntem budur. |
+| **B — Odometre girişi** | Yüksek | Düşük (2 sayı girme) | Kullanıcı yolculuk başında ve sonunda kilometre sayacı değerini girerse, gerçek kat edilen mesafe GPS tahmininden daha kesin hale gelir (özellikle şehir içi GPS sapmalarında). |
+| **C — Manuel fiş/dolum girişi** | En yüksek | Orta (yolculuk sonrasında form doldurma) | Kullanıcı gerçekte satın aldığı yakıt miktarını (litre) ve ödediği tutarı (veya elektrikli araçta şarj için ödediği tutarı) girer. Bu, hem o yolculuğa hem de genel tüketim kalibrasyonuna en değerli veridir. |
+
+Kullanıcı hiçbir ek işlem yapmazsa sistem otomatik olarak **Yöntem A**'yı uygular ve sonucu "tahmini" (`entry_method: gps_estimated`) olarak işaretler; kullanıcı isterse yolculuk sonunda B veya C yöntemiyle daha hassas veri girip bunu güncelleyebilir.
+
+### 21.3 Veri Modeli
+
+`journeys` tablosuna eklenen kolonlar:
+
+| Kolon | Tip | Açıklama |
+|---|---|---|
+| actual_distance_meters | int, nullable | Yolculuk boyunca GPS'ten ölçülen gerçek kat edilen mesafe |
+| actual_duration_seconds | int, nullable | Gerçek geçen süre (başlangıç-bitiş zaman damgası farkı) |
+| completed_at | timestamp, nullable | Yolculuğun "tamamlandı" olarak işaretlendiği an |
+| completion_status | varchar | `full` (tüm duraklar ziyaret edildi), `partial` (bazı duraklar atlandı/iptal edildi), `abandoned` (yolculuk tamamlanmadan bırakıldı) |
+
+**`trip_expenses`** (yeni tablo — bir yolculuğun gerçekleşen maliyet/tüketim kaydı, `journeys` ile 1-1 ilişki)
+
+| Kolon | Tip | Açıklama |
+|---|---|---|
+| id | UUID (PK) | |
+| journey_id | UUID (FK, unique) | |
+| vehicle_id | UUID (FK) | Hangi araçla yapıldığı (Bölüm 20'deki `vehicles` tablosuna referans) |
+| entry_method | varchar | `gps_estimated`, `odometer`, `manual_receipt` |
+| odometer_start_km / odometer_end_km | int, nullable | Yöntem B için |
+| actual_fuel_liters | decimal, nullable | Yakıtlı araç, Yöntem C'de kullanıcı girer; A/B'de sistem hesaplar |
+| actual_energy_kwh | decimal, nullable | Elektrikli araç için karşılığı |
+| actual_fuel_cost | decimal | Gerçekleşen (veya en iyi tahminle hesaplanan) yakıt/enerji maliyeti |
+| actual_toll_cost | decimal, nullable | Kullanıcı fiş/geçiş kaydı girerse; girmezse plan tahminindeki `total_toll_cost` baz alınır |
+| estimated_fuel_cost_at_planning | decimal | Karşılaştırma için, o yolculuğun planlama anındaki tahmini maliyeti (denormalize edilmiş kopya — tarihsel karşılaştırmanın plan güncellense bile bozulmaması için) |
+| variance_percent | decimal (hesaplanan/generated) | `(actual_fuel_cost - estimated_fuel_cost_at_planning) / estimated_fuel_cost_at_planning × 100` |
+| receipt_photo_url | varchar, nullable | Yöntem C'de kullanıcı fiş fotoğrafı eklerse (V3, opsiyonel — OCR ile otomatik okuma da V3+ kapsamına not düşülür) |
+| created_at | timestamp | |
+
+### 21.4 Hesaplama Akışı
+
+```
+1. Kullanıcı son durağa vardığını işaretler / yolculuğu "Tamamla" der.
+2. Sistem journeys.actual_distance_meters ve actual_duration_seconds değerlerini
+   GPS geçmişinden (uygulama önden foreground'da konum örneklemesi tuttuysa)
+   veya seçili planın gerçekleşen bacaklarının toplamından hesaplar.
+3. Varsayılan olarak (Yöntem A):
+   actual_fuel_liters = (actual_distance_meters / 1000 / 100)
+                          × vehicle.fuel_consumption_l_per_100km
+   actual_fuel_cost   = actual_fuel_liters × güncel_yakıt_fiyatı
+   (elektrikli araçta enerji/kwh karşılığı ile aynı mantık)
+4. Kullanıcıya bir "Yolculuk Özeti" ekranı gösterilir:
+     - Planlanan tahmini maliyet: ₺155
+     - Gerçekleşen (tahmini) maliyet: ₺162
+     - "İsterseniz gerçek yakıt fişinizi girerek bu tahmini kesinleştirebilirsiniz"
+       [Fiş/Dolum Bilgisi Gir] butonu (opsiyonel)
+5. Kullanıcı Yöntem B veya C ile veri girerse, trip_expenses güncellenir,
+   entry_method değişir, variance_percent yeniden hesaplanır.
+6. Kayıt route_feedback'e (Bölüm 17) bağlanarak kişiselleştirme ve
+   kalibrasyon döngüsüne dahil edilir (bkz. 21.5).
+```
+
+### 21.5 Tahmin Kalibrasyonu (Öğrenme Döngüsü)
+
+Bu, Bölüm 17'deki `PreferenceLearningService`nin doğal bir uzantısıdır — orada kullanıcının **tercih ağırlıkları** öğreniliyordu, burada aracın **gerçek tüketim değeri** öğrenilir:
+
+```
+Periyodik (haftalık) batch job:
+  Her araç için, son N (örn. 10) yolculuğun trip_expenses kayıtlarından
+  (özellikle entry_method = manual_receipt veya odometer olanlardan,
+  bunlar gps_estimated'a göre daha güvenilir kabul edilir)
+  ağırlıklı ortalama gerçek tüketim (l/100km veya kWh/100km) hesaplanır.
+
+  Eğer bu ortalama, vehicle.fuel_consumption_l_per_100km değerinden
+  anlamlı ölçüde (örn. > %10) sapıyorsa:
+    Kullanıcıya bildirim: "Aracınızın gerçek tüketimi kayıtlı değerden
+    farklı görünüyor (7.2 l/100km yerine 8.1 l/100km). Güncellemek
+    ister misiniz?" [Güncelle] [Yoksay]
+
+  Kullanıcı onaylarsa vehicle.fuel_consumption_l_per_100km güncellenir
+  ve bundan sonraki tüm ÖN tahminler (Bölüm 20.3) daha isabetli olur.
+```
+
+Bu tasarımda **otomatik/sessiz güncelleme yapılmaz** — kullanıcı onayı şarttır. Bunun nedeni: tek seferlik anormal bir yolculuk (örn. klima sürekli açık, çok yüklü bagaj, şehir dışı vs.) ortalamayı yanlış yönde çekmemeli; kullanıcı bilgilendirilip karar kendisine bırakılır.
+
+### 21.6 Geçmiş ve İstatistik Görünümü
+
+Kullanıcıya sunulan yeni ekranlar/veri:
+
+- **Yolculuk Geçmişi listesi:** her yolculuk için planlanan vs. gerçekleşen maliyet/süre/mesafe yan yana.
+- **Araç bazlı özet (Bölüm 20'deki `vehicles` ile ilişkili):** "Bu ay Civic ile: 340 km, ₺612 yakıt, ortalama 7.4 l/100km."
+- **Genel gider özeti:** haftalık/aylık toplam yakıt+toll gideri, basit bir çizgi/bar grafikle (mobilde `recharts`/`victory-native` gibi bir kütüphaneyle, MVP'de basit sayısal özet yeterli, grafik V2'ye bırakılabilir).
+- **Tahmin doğruluğu göstergesi (şeffaflık amaçlı, V3):** "Son 20 yolculukta tahminleriniz ortalama %6 sapmayla gerçekleşti" gibi meta-bilgi — kullanıcıya sistemin ne kadar güvenilir olduğunu gösterir.
+
+### 21.7 API Değişiklikleri
+
+```
+POST   /api/v1/journeys/{id}/complete
+       # Body: { "completionStatus": "full", "actualDistanceMeters": 45300, "actualDurationSeconds": 4700 }
+       # GPS bazlı otomatik tahmini tetikler, trip_expenses kaydı oluşturur
+
+PUT    /api/v1/journeys/{id}/expenses
+       # Body (Yöntem B): { "entryMethod": "odometer", "odometerStartKm": 18420, "odometerEndKm": 18465 }
+       # Body (Yöntem C): { "entryMethod": "manual_receipt", "actualFuelLiters": 34.2, "actualFuelCost": 175.0 }
+
+GET    /api/v1/journeys/{id}/expenses          # Tek yolculuğun gider özeti
+GET    /api/v1/vehicles/{id}/stats?period=monthly   # Araç bazlı toplam km/maliyet/ortalama tüketim
+GET    /api/v1/users/me/expense-summary?period=monthly  # Kullanıcının tüm araçlar toplam gideri
+```
+
+### 21.8 Mobil Uygulama Değişiklikleri
+
+- Yolculuk tamamlandığında (son durakta "Vardım" veya "Yolculuğu Bitir") otomatik olarak **Yolculuk Özeti** ekranı açılır: planlanan vs. gerçekleşen maliyet karşılaştırması + opsiyonel "Fiş/Dolum Bilgisi Gir" kısayolu.
+- Profil altında yeni **"Giderlerim"** sekmesi: araç bazlı ve genel gider özetleri, geçmiş yolculuk listesi.
+- Araç detay ekranında (Bölüm 20.7'deki "Araçlarım" ekranının alt sayfası) o araca ait toplam km ve gider geçmişi.
+- Kalibrasyon bildirimi geldiğinde ("aracınızın gerçek tüketimi farklı görünüyor") basit bir onay/red diyaloğu.
+
+### 21.9 Edge Case'ler
+
+- Kullanıcı yolculuğu hiç "tamamlandı" olarak işaretlemezse → sistem belirli bir süre (örn. son aktiviteden 3 saat) sonra yolculuğu otomatik `abandoned` durumuna çeker; bu yolculuklar gider istatistiklerine **dahil edilmez** (yanıltıcı olmaması için), kullanıcı isterse manuel tamamlayıp geriye dönük veri girebilir.
+- GPS bazlı `actual_distance_meters`, planlanan mesafeden aşırı sapıyorsa (örn. %50+ fazla — kullanıcı plan dışı yerlere uğradıysa) → sistem bunu "planlanan rotadan belirgin sapma tespit edildi, tahmini gider bu nedenle daha az güvenilir olabilir" notuyla işaretler, kullanıcıya manuel girişi önerir.
+- Yöntem C'de kullanıcı yanlış birim girerse (örn. TL'yi litre alanına yazarsa) → makul aralık kontrolü (örn. tek dolumda 200 litreden fazla, gasoline bir binek araç için) tetiklenir, kullanıcıya "bu değer beklenenden yüksek görünüyor, kontrol eder misiniz?" uyarısı — engellenmez, sadece uyarılır (kullanıcının gerçek bir durumu olabilir, örn. ticari araç).
+- Yolculuk `partial` tamamlandıysa (bazı duraklara uğranmadı) → gerçekleşen mesafe/maliyet yine de kaydedilir ama "eksik tamamlanmış yolculuk" etiketiyle, istatistiklerde ayrı gösterilir (tam yolculuklarla karıştırılmaz).
+- Kullanıcının o yolculukta hiç araç seçmediği (Bölüm 20.6'da `vehicleId` boş bırakılmış) durumlarda → gerçek tüketim hesaplanamaz, sadece gerçek mesafe/süre kaydedilir, gider tahmini "araç bilgisi girilmediği için hesaplanamadı" notuyla boş bırakılır.
+- Çoklu kullanıcı aynı aracı paylaşıyorsa (V3+, kapsam dışı not): MVP'de her araç tek kullanıcıya bağlıdır, paylaşımlı araç/filo senaryosu B2B panelinin kapsamına bırakılır.
+
+### 21.10 Test Senaryoları (Ek)
+
+- Yöntem A (GPS) ile tamamlanan bir yolculukta, `actual_distance_meters` ve aracın tüketim oranı verildiğinde `actual_fuel_cost` hesabının doğru yapıldığı doğrulanır.
+- Yöntem B (odometre) girişi sonrası `trip_expenses.entry_method`'un güncellendiği ve mesafenin odometre farkına göre yeniden hesaplandığı doğrulanır.
+- Yöntem C (manuel fiş) girişinde, kullanıcının girdiği `actualFuelLiters`/`actualFuelCost` değerlerinin sisteme ait GPS tahminini **ezdiği** (override ettiği) ve `variance_percent`in doğru hesaplandığı doğrulanır.
+- `abandoned` durumuna düşen bir yolculuğun gider istatistiklerine dahil edilmediği doğrulanır.
+- Kalibrasyon batch job'ının, son 10 yolculuğun ağırlıklı ortalamasını doğru hesapladığı ve %10 eşiğinin altındaki sapmalarda bildirim tetiklemediği (yalnızca eşik aşıldığında tetiklendiği) doğrulanır.
+- Kullanıcı kalibrasyon bildirimini reddettiğinde `vehicle.fuel_consumption_l_per_100km` değerinin **değişmediği** doğrulanır (sessiz otomatik güncelleme olmadığının regresyon testi).
+
+---
+
+## 22. Güvenlik, Gizlilik ve KVKK
+
+### 22.1 Veri Sınıflandırması
 
 | Veri Türü | Hassasiyet | Önlem |
 |---|---|---|
@@ -1039,14 +1377,14 @@ GET /api/v1/journeys/{id}/along-route?category=fuel&max_detour_minutes=5
 | Doğal dil girdisi (raw_nlp_input) | Orta | LLM sağlayıcısına gönderilirken üçüncü taraf veri işleme sözleşmesi (Anthropic API zero-retention seçenekleri değerlendirilmeli), kullanıcıya "bu metin AI'ye gönderiliyor" bilgilendirmesi |
 | Ödeme/ücret bilgisi (toll, fuel) | Düşük | Sadece tahmini, gerçek ödeme entegrasyonu MVP kapsamında yok |
 
-### 20.2 KVKK / Gizlilik Uyumluluğu
+### 22.2 KVKK / Gizlilik Uyumluluğu
 
 - Açık rıza metni: konum verisinin işlenmesi için kayıt sırasında açık onay.
 - Kullanıcının verilerini **silme hakkı** (hesap silme → tüm `journeys`, `journey_stops` cascade silinir; anonimleştirilmiş istatistik verisi ayrı tutulabilir, kullanıcıyla ilişkilendirilemez hale getirilir).
 - Veri işleme envanterinde LLM sağlayıcısı ve harita sağlayıcısı üçüncü taraf olarak belirtilir.
 - Konum verisi **arka planda** (background location) MVP'de toplanmaz — bu bilinçli bir tasarım kararı, hem gizlilik hem iOS/Android izin karmaşıklığını MVP'den çıkarmak için.
 
-### 20.3 API Güvenliği
+### 22.3 API Güvenliği
 
 - Tüm endpoint'ler JWT ile korunur, `journeys` gibi kaynaklara erişimde **sahiplik kontrolü** (bir kullanıcı başkasının yolculuğunu göremez/değiştiremez) — her serviste `journey.getUserId().equals(currentUserId)` kontrolü zorunlu.
 - Rate limiting (Bucket4j veya Spring Cloud Gateway) — brute force ve API maliyeti kötüye kullanımına karşı.
@@ -1054,9 +1392,9 @@ GET /api/v1/journeys/{id}/along-route?category=fuel&max_detour_minutes=5
 
 ---
 
-## 21. Performans ve Ölçeklenebilirlik
+## 23. Performans ve Ölçeklenebilirlik
 
-### 21.1 Hedef SLA'lar (MVP)
+### 23.1 Hedef SLA'lar (MVP)
 
 | İşlem | Hedef Süre |
 |---|---|
@@ -1066,7 +1404,7 @@ GET /api/v1/journeys/{id}/along-route?category=fuel&max_detour_minutes=5
 | Departure suggestion | < 3 sn |
 | Route-aware search | < 2 sn |
 
-### 21.2 Ölçeklenebilirlik Stratejisi
+### 23.2 Ölçeklenebilirlik Stratejisi
 
 - Backend stateless → yatay ölçeklenebilir (birden fazla instance, load balancer arkasında).
 - Redis cache ile Google API çağrı sayısı minimize edilir (maliyet + performans).
@@ -1075,7 +1413,7 @@ GET /api/v1/journeys/{id}/along-route?category=fuel&max_detour_minutes=5
 
 ---
 
-## 22. Maliyet Analizi (Yaklaşık, Sağlayıcı Fiyatlandırmasına Göre Değişir)
+## 24. Maliyet Analizi (Yaklaşık, Sağlayıcı Fiyatlandırmasına Göre Değişir)
 
 > Not: Google ve Anthropic API fiyatlandırmaları zamanla değişebilir; üretime geçmeden önce güncel fiyat sayfaları kontrol edilmelidir. Aşağıdaki tablo **mimari planlama** amaçlı kaba bir çerçevedir, kesin fiyat taahhüdü değildir.
 
@@ -1093,46 +1431,46 @@ GET /api/v1/journeys/{id}/along-route?category=fuel&max_detour_minutes=5
 
 ---
 
-## 23. Edge Case Kataloğu (Kapsamlı)
+## 25. Edge Case Kataloğu (Kapsamlı)
 
-### 23.1 Girdi / Veri Kalitesi
+### 25.1 Girdi / Veri Kalitesi
 - Kullanıcı 0 durak ile optimize etmeye çalışırsa → 400 hatası, "en az 1 durak ekleyin".
 - Aynı koordinatta iki durak (kullanıcı yanlışlıkla aynı yeri iki kez eklerse) → sistem tespit eder, "bu durak zaten eklenmiş, birleştirmek ister misiniz?" uyarısı.
 - Geçersiz/erişilemez koordinat (denizin ortası, kapalı askeri bölge vb.) → Google API'den route bulunamadı hatası, kullanıcıya net mesaj.
 - Aşırı uzak durak (örn. şehirlerarası, 500+ km) → sistem bunu engellemez ama "bu bir şehirlerarası yolculuk, tahminler daha az kesin olabilir" uyarısı.
 
-### 23.2 Zaman Penceresi Çelişkileri
+### 25.2 Zaman Penceresi Çelişkileri
 - İki `critical` durağın zaman pencereleri, aralarındaki mesafe göz önüne alındığında **fiziksel olarak imkansızsa** (örn. A'dan B'ye min 40 dk sürüyor ama A'nın penceresi 12:00'de bitiyor, B'nin 12:10'da) → sistem optimizasyon öncesi bunu tespit eder ve "Bu iki durağı aynı planda karşılamak mümkün değil" hatası döner, kullanıcıdan önceliklendirme ister.
 - Zaman penceresi geçmişte kalmış (örn. bugün saat 15:00'te "bu sabah 09:00'a kadar" gibi bir kısıt girilmişse) → validasyon hatası.
 - `time_window_start` > `time_window_end` → validasyon hatası.
 
-### 23.3 Trafik / Rota
+### 25.3 Trafik / Rota
 - Google API'nin trafik verisi olmayan bölge (kırsal, düşük veri yoğunluğu) → geniş güven aralığı, "tahmin sınırlı veri ile yapıldı" etiketi.
 - Kaza/yol kapanması nedeniyle rota tamamen kesilmiş → alternatif rota otomatik aranır, hiç alternatif yoksa kullanıcıya net bilgilendirme.
 - Feribot/köprü gibi zaman tarifeli geçişler → MVP kapsamında özel olarak modellenmez, Google'ın döndürdüğü süre baz alınır (bilinen sınırlama olarak dokümante edilir).
 
-### 23.4 Cihaz / Konum
+### 25.4 Cihaz / Konum
 - GPS izni verilmemiş → kullanıcı manuel başlangıç adresi girebilir, konum tabanlı özellikler (mevcut konumdan otomatik başlangıç) devre dışı kalır.
 - GPS sinyali zayıf/yanlış (şehir içi yüksek binalar, "urban canyon" etkisi) → son bilinen doğru konum + zaman aşımı ile yaklaşık pozisyon kullanılır, kesinlik düşük olduğunda kullanıcıya belirtilir.
 - Uygulama arka plana alındığında (V2 aktif yolculuk takibi) → iOS/Android'in arka plan kısıtlamaları nedeniyle güncellemeler gecikebilir; bu bilinen bir sınırlama olarak UI'da not düşülür.
 
-### 23.5 Eşzamanlılık / Çoklu Cihaz
+### 25.5 Eşzamanlılık / Çoklu Cihaz
 - Kullanıcı aynı yolculuğu iki cihazdan aynı anda düzenlerse → "son yazan kazanır" (last-write-wins) + optimistic locking (`version` kolonu, JPA `@Version`) ile çakışma tespiti; çakışma durumunda istemciye 409 Conflict + güncel veri.
 
-### 23.6 Dış Servis Kesintileri
+### 25.6 Dış Servis Kesintileri
 - Google API tamamen erişilemezse → tüm optimize istekleri graceful şekilde reddedilir, kullanıcıya "harita servisi şu anda kullanılamıyor" mesajı, retry butonu.
 - LLM API erişilemezse → NLP girişi devre dışı, manuel form her zaman çalışır durumda kalır (kritik: NLP asla tek giriş yolu olmamalı).
 
-### 23.7 İş Mantığı Kenar Durumları
+### 25.7 İş Mantığı Kenar Durumları
 - Kullanıcı `returnToStart: false` seçip ama hedef belirtmezse → son durak otomatik hedef kabul edilir, bu davranış UI'da açıkça belirtilir.
 - Tüm duraklar `low` öncelikli ve zaman kısıtı hiç yoksa → sistem sadece mesafe/süre bazlı optimize eder (klasik TSP'ye düşer), bu normal ve beklenen davranıştır.
 - Kullanıcı bir planı seçtikten sonra durak eklerse/çıkarırsa → mevcut plan geçersiz kılınır (`is_selected = false`), yeniden optimize edilmesi gerektiği açıkça belirtilir.
 
 ---
 
-## 24. Test Stratejisi ve Senaryoları
+## 26. Test Stratejisi ve Senaryoları
 
-### 24.1 Test Piramidi
+### 26.1 Test Piramidi
 
 ```
         ▲
@@ -1144,7 +1482,7 @@ GET /api/v1/journeys/{id}/along-route?category=fuel&max_detour_minutes=5
   /-----------\
 ```
 
-### 24.2 Backend Unit Test Senaryoları
+### 26.2 Backend Unit Test Senaryoları
 
 **`OptimizationEngine` testleri:**
 - 2 durak, zaman kısıtı yok → beklenen: mesafe/süre bazlı en kısa sıralama.
@@ -1168,14 +1506,14 @@ GET /api/v1/journeys/{id}/along-route?category=fuel&max_detour_minutes=5
 - 429 (rate limit) yanıtı → circuit breaker devreye girer, retry-after uyulur.
 - 5xx yanıt → belirlenen sayıda retry sonrası hata fırlatılır.
 
-### 24.3 Backend Integration Test Senaryoları (Testcontainers + PostgreSQL)
+### 26.3 Backend Integration Test Senaryoları (Testcontainers + PostgreSQL)
 
 - `POST /journeys` → `POST /journeys/{id}/optimize` uçtan uca akış (Google API WireMock ile stub'lanır), veritabanına doğru kayıt (journey, stops, plans, legs) atıldığı doğrulanır.
 - Yetkisiz kullanıcı başka bir kullanıcının journey'sine erişmeye çalışırsa → 403.
 - Aynı journey'e eşzamanlı iki güncelleme → optimistic locking, 409 Conflict testi.
 - Migration'ların (Flyway) temiz bir veritabanında sorunsuz çalıştığı doğrulanır.
 
-### 24.4 Mobil Uygulama Test Senaryoları
+### 26.4 Mobil Uygulama Test Senaryoları
 
 **Unit (Jest):**
 - `formatDuration` fonksiyonu: 65 dakika → "1s 5dk" formatlaması.
@@ -1191,13 +1529,13 @@ GET /api/v1/journeys/{id}/along-route?category=fuel&max_detour_minutes=5
 - Senaryo 2: Kullanıcı doğal dil ile durak girer → parse sonucu onay ekranında görülür → onaylar → optimize akışına geçer.
 - Senaryo 3: İnternet bağlantısı yokken optimize denemesi → kullanıcı dostu hata mesajı gösterilir, uygulama çökmemelidir.
 
-### 24.5 Algoritma Doğrulama / Regresyon Testleri
+### 26.5 Algoritma Doğrulama / Regresyon Testleri
 
 - Bilinen küçük problemler için **elle hesaplanmış optimal sonuç** ile algoritma çıktısı karşılaştırılır (örn. 4 durak, elle çözülebilir bir TSP örneği).
 - Büyük veri setlerinde (15-20 durak, sentetik veri) algoritmanın **makul sürede** (SLA içinde) sonuç ürettiği performans testiyle doğrulanır.
 - "Skor fonksiyonu monotonluğu" testi: bir adayın süresini yapay olarak artırdığımızda (diğer her şey sabit), `fast` profilinde skorunun kötüleştiği (yani daha az tercih edilir hale geldiği) doğrulanır — algoritmanın mantıksal tutarlılığı için sağlamlık testi.
 
-### 24.6 Güvenlik Testleri
+### 26.6 Güvenlik Testleri
 
 - SQL injection denemeleri (JPA parametreli sorgular kullanıldığından teorik olarak korunaklı, yine de otomatik tarama — OWASP ZAP).
 - JWT süresi dolmuş token ile istek → 401.
@@ -1205,15 +1543,15 @@ GET /api/v1/journeys/{id}/along-route?category=fuel&max_detour_minutes=5
 
 ---
 
-## 25. DevOps / CI-CD / Deployment
+## 27. DevOps / CI-CD / Deployment
 
-### 25.1 Ortamlar
+### 27.1 Ortamlar
 
 ```
 local (docker-compose) → staging → production
 ```
 
-### 25.2 CI/CD Pipeline (GitHub Actions)
+### 27.2 CI/CD Pipeline (GitHub Actions)
 
 **Backend pipeline:**
 ```
@@ -1239,7 +1577,7 @@ on: push/PR
 7. (release tag'inde) eas build --profile production + eas submit
 ```
 
-### 25.3 Ortam Değişkenleri (Örnek Liste)
+### 27.3 Ortam Değişkenleri (Örnek Liste)
 
 Backend `.env` / Spring profile:
 ```
@@ -1262,7 +1600,7 @@ SENTRY_DSN
 
 ---
 
-## 26. Yol Haritası (Detaylı Faz Planı)
+## 28. Yol Haritası (Detaylı Faz Planı)
 
 ### Faz 1 — Proje İskeleti
 - React Native + Expo + TypeScript projesi kurulumu, Expo Go ile iPhone'da "Hello World" çalıştırma.
@@ -1278,10 +1616,14 @@ SENTRY_DSN
 - Mobil: Journey Builder ekranı — başlangıç (mevcut konum), durak ekleme (Places arama ile), hedef.
 - Backend: Google Distance Matrix entegrasyonu (`GoogleRoutesProvider.computeMatrix`).
 - Backend: Basit optimizasyon (≤8 durak brute-force + skorlama, 3 plan üretimi).
+- Backend: `vehicles` tablosu (Bölüm 20.2) + temel CRUD endpoint'leri; optimizasyon motorunun maliyet hesabı `vehicle_id` verildiğinde gerçek tüketim değerini kullanacak şekilde bağlanır (Bölüm 20.3), `vehicle_id` yoksa mevcut genel ortalama davranışına düşer.
+- Mobil: "Araçlarım" ekranı (araç ekle/düzenle/varsayılan seç) + Journey Builder'a araç seçici.
 - Mobil: Plan sonuç ekranı (3 kart), harita üzerinde rota gösterimi (polyline).
 - Deep link ile Apple Maps/Google Maps'e navigasyon devri.
+- Backend: `trip_expenses` tablosu (Bölüm 21.3) + `POST /journeys/{id}/complete` — yolculuk tamamlandığında GPS bazlı otomatik gerçek mesafe/yakıt maliyeti hesabı (Yöntem A, Bölüm 21.2/21.4).
+- Mobil: Yolculuk tamamlandığında gösterilen basit "Yolculuk Özeti" ekranı (planlanan vs. gerçekleşen maliyet).
 
-**→ Bu noktada çalışan bir MVP vardır: kullanıcı duraklarını girer, 3 plan arasından seçer, navigasyona geçer.**
+**→ Bu noktada çalışan bir MVP vardır: kullanıcı aracını (opsiyonel) kaydeder, duraklarını girer, 3 plan arasından seçer, navigasyona geçer ve yolculuk sonunda gerçekleşen tahmini maliyeti görür.**
 
 ### Faz 4 — Smart Departure + NLP Girişi
 - Backend: Departure Time Optimizer servisi.
@@ -1301,10 +1643,15 @@ SENTRY_DSN
 - Backend: `along-route` endpoint'i, `ParkingService`.
 - Mobil: Rota üzeri arama UI, otopark önerisi kartı.
 
-### Faz 8 — Explainability + Kişiselleştirme
+### Faz 8 — Explainability + Kişiselleştirme + EV Menzil/Şarj Planlaması
 - Backend: `ExplainabilityService` (kural tabanlı, sonra LLM destekli).
 - Backend: `route_feedback` kaydı + `PreferenceLearningService` (haftalık batch job).
+- Backend: EV menzil/şarj molası algoritması (Bölüm 20.4), `charging_stops` tablosu, rota üzeri şarj istasyonu arama (Bölüm 19'daki route-aware search altyapısının `ev_charging_station` kategorisiyle yeniden kullanımı).
 - Mobil: Plan kartlarında gerekçe rozetleri, tercih öğrenme ayarları ekranı.
+- Mobil: EV seçiliyken şarj yüzdesi girişi, plan kartlarında 🔋 şarj molası rozeti.
+- Backend: Yöntem B/C (odometre, manuel fiş) giriş endpoint'leri (`PUT /journeys/{id}/expenses`), kalibrasyon batch job'ı (Bölüm 21.5).
+- Backend: `GET /vehicles/{id}/stats`, `GET /users/me/expense-summary` endpoint'leri.
+- Mobil: "Giderlerim" sekmesi (araç bazlı ve genel gider özeti, geçmiş yolculuk listesi), kalibrasyon bildirimi onay/red diyaloğu.
 
 ### Faz 9 — Yayınlama Hazırlığı
 - EAS Build production profili, App Store Connect kurulumu.
@@ -1315,22 +1662,22 @@ SENTRY_DSN
 
 ---
 
-## 27. Vibe Coding Uygulama Rehberi (AI'ye Nasıl Prompt Yazılır)
+## 29. Vibe Coding Uygulama Rehberi (AI'ye Nasıl Prompt Yazılır)
 
 Bu bölüm, yukarıdaki dokümanı bir AI kod asistanına (Claude Code, Cursor, vb.) vererek projeyi adım adım inşa ederken izlenecek pratik yöntemi anlatır.
 
-### 27.1 Genel Prensipler
+### 29.1 Genel Prensipler
 
-1. **Her fazı ayrı bir konuşma/oturum olarak ele al.** Tüm projeyi tek seferde "yap bitir" diye istemek yerine, Bölüm 26'daki fazları sırayla, her birini kendi içinde tamamlanmış (çalışan, test edilebilir) birim olarak iste.
+1. **Her fazı ayrı bir konuşma/oturum olarak ele al.** Tüm projeyi tek seferde "yap bitir" diye istemek yerine, Bölüm 28'deki fazları sırayla, her birini kendi içinde tamamlanmış (çalışan, test edilebilir) birim olarak iste.
 2. **Her faz için bu dokümanın ilgili bölümünü referans göster.** Örnek prompt:
    > "Faz 3'ü uygulayacağız. Aşağıdaki mimari dokümanın 9 (Veritabanı Şeması), 10 (API Tasarımı) ve 11 (Optimizasyon Motoru) bölümlerine göre, Spring Boot backend'inde `journeys` ve `journey_stops` entity'lerini, ilgili repository/service/controller katmanlarını ve `OptimizationEngine`'in brute-force + skorlama versiyonunu implemente et. Flyway migration'ı da ekle."
 3. **Şema/tip önce, mantık sonra.** Önce entity/DTO/TypeScript tiplerini oluşturmasını iste, sonra iş mantığını. Bu, AI'nin tutarlı bir sözleşme üzerinde çalışmasını sağlar.
-4. **Her önemli parçadan sonra test iste.** "Bu servisi yazdıktan sonra Bölüm 24.2'deki test senaryolarına karşılık gelen JUnit testlerini de yaz" gibi.
-5. **Edge case listesini kontrol listesi olarak kullan.** Bir özellik "bitti" denmeden önce, Bölüm 23'teki ilgili edge case'lerin kod içinde ele alınıp alınmadığını AI'ye tek tek sordur: "Bölüm 23.2'deki zaman penceresi çelişkisi senaryosunu bu kodda nasıl ele aldın, göster."
+4. **Her önemli parçadan sonra test iste.** "Bu servisi yazdıktan sonra Bölüm 26.2'deki test senaryolarına karşılık gelen JUnit testlerini de yaz" gibi.
+5. **Edge case listesini kontrol listesi olarak kullan.** Bir özellik "bitti" denmeden önce, Bölüm 25'teki ilgili edge case'lerin kod içinde ele alınıp alınmadığını AI'ye tek tek sordur: "Bölüm 25.2'deki zaman penceresi çelişkisi senaryosunu bu kodda nasıl ele aldın, göster."
 6. **API sözleşmesini sabit tut.** Bölüm 10'daki endpoint/DTO tanımlarını hem backend hem mobil tarafta AI'ye referans olarak ver — ikisinin birbirinden bağımsız gelişip uyumsuz hale gelmesini önler.
 7. **Küçük, gözden geçirilebilir commit'ler iste.** "Bu değişikliği yaparken sadece X dosyasını değiştir, diğer dosyalara dokunma" gibi net sınırlar çiz — AI'nin ilgisiz yerlerde büyük, denetlenmesi zor değişiklikler yapmasını önler.
 
-### 27.2 Örnek Prompt Şablonu (Her Faz İçin Kullanılabilir)
+### 29.2 Örnek Prompt Şablonu (Her Faz İçin Kullanılabilir)
 
 ```
 Bağlam: Elimde [proje adı] için detaylı bir mimari doküman var (ekte/yapıştırılmış).
@@ -1343,7 +1690,7 @@ Bağlam: Elimde [proje adı] için detaylı bir mimari doküman var (ekte/yapı�
 2. [Servis/iş mantığı]
 3. [Controller/endpoint veya UI bileşeni]
 4. [İlgili unit/integration testler]
-5. [Bölüm 23'ten ilgili edge case'lerin ele alınması]
+5. [Bölüm 25'ten ilgili edge case'lerin ele alınması]
 
 Kısıtlar:
 - Sadece [ilgili dizin/dosyalar] içinde değişiklik yap.
@@ -1351,13 +1698,13 @@ Kısıtlar:
 - Kod yazdıktan sonra hangi test senaryolarını karşıladığını özetle.
 ```
 
-### 27.3 Vibe Coding Sırasında Dikkat Edilecek Riskler
+### 29.3 Vibe Coding Sırasında Dikkat Edilecek Riskler
 
-- **AI'nin optimizasyon algoritmasını "basitleştirmesi":** Zaman penceresi kısıtlarını görmezden gelip sadece TSP çözmesi yaygın bir hatadır. Bölüm 11 ve 23.2'yi özellikle vurgulayarak kontrol et.
+- **AI'nin optimizasyon algoritmasını "basitleştirmesi":** Zaman penceresi kısıtlarını görmezden gelip sadece TSP çözmesi yaygın bir hatadır. Bölüm 11 ve 25.2'yi özellikle vurgulayarak kontrol et.
 - **Google API kısıtlamasının (Bölüm 12.2) unutulması:** AI, `computeRoutes`'u doğrudan çoklu waypoint + alternatif rota ile çağırmaya çalışabilir; bu API'de çalışmaz. Leg-by-leg yaklaşımının uygulandığını kod incelemesiyle doğrula.
 - **API anahtarlarının mobil tarafa sızması:** Her zaman kontrol et — Google/LLM anahtarları sadece backend'de olmalı.
 - **Şema tutarsızlığı:** Mobil TypeScript tipleri ile backend DTO'ları zamanla birbirinden sapabilir; periyodik olarak "şu an mobil ve backend arasındaki JourneyRequest şeması tutarlı mı, karşılaştır" diye AI'ye kontrol ettir.
-- **Test yazmadan "bitti" denmesi:** Her fazın sonunda Bölüm 24'teki ilgili test senaryolarının gerçekten yazıldığını ve geçtiğini doğrula (AI'ye `mvn test` / `npm test` çıktısını göstermesini iste).
+- **Test yazmadan "bitti" denmesi:** Her fazın sonunda Bölüm 26'daki ilgili test senaryolarının gerçekten yazıldığını ve geçtiğini doğrula (AI'ye `mvn test` / `npm test` çıktısını göstermesini iste).
 
 ---
 
