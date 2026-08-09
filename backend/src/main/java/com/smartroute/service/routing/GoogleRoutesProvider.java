@@ -138,6 +138,10 @@ public class GoogleRoutesProvider implements RoutingProvider {
             requestBody.put("departureTime", formattedTime);
         }
 
+        if (options.getTrafficModel() != null) {
+            requestBody.put("trafficModel", options.getTrafficModel());
+        }
+
         if (options.isAvoidTolls()) {
             requestBody.put("extraComputations", List.of("TOLLS"));
         }

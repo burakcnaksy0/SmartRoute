@@ -5,6 +5,8 @@ import com.smartroute.dto.*;
 import com.smartroute.exception.UserNotFoundException;
 import com.smartroute.repository.UserRepository;
 import com.smartroute.service.journey.JourneyPlanningService;
+import com.smartroute.service.journey.DepartureOptimizerService;
+import com.smartroute.service.nlp.JourneyNlpParsingService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -18,16 +20,33 @@ public class JourneyController {
 
     private final JourneyPlanningService journeyPlanningService;
     private final UserRepository userRepository;
+    private final JourneyNlpParsingService journeyNlpParsingService;
+    private final DepartureOptimizerService departureOptimizerService;
+    private final com.smartroute.service.places.PlacesService placesService;
 
-    public JourneyController(JourneyPlanningService journeyPlanningService, UserRepository userRepository) {
+    public JourneyController(
+            JourneyPlanningService journeyPlanningService,
+            UserRepository userRepository,
+            JourneyNlpParsingService journeyNlpParsingService,
+            DepartureOptimizerService departureOptimizerService,
+            com.smartroute.service.places.PlacesService placesService) {
         this.journeyPlanningService = journeyPlanningService;
         this.userRepository = userRepository;
+        this.journeyNlpParsingService = journeyNlpParsingService;
+        this.departureOptimizerService = departureOptimizerService;
+        this.placesService = placesService;
     }
 
     private User getCurrentUser() {
         String email = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new UserNotFoundException("Oturum açmış kullanıcı bulunamadı."));
+    }
+
+    @PostMapping("/parse-nlp")
+    public ResponseEntity<JourneyRequest> parseNlp(@RequestBody NlpParseRequest request) {
+        User user = getCurrentUser();
+        return ResponseEntity.ok(journeyNlpParsingService.parseAndGeocode(request.getText(), user));
     }
 
     @PostMapping
@@ -58,5 +77,32 @@ public class JourneyController {
     public ResponseEntity<JourneyPlanResponse> selectPlan(@PathVariable UUID id, @PathVariable UUID planId) {
         User user = getCurrentUser();
         return ResponseEntity.ok(journeyPlanningService.selectPlan(id, planId, user));
+    }
+
+    @PostMapping("/{id}/departure-suggestions")
+    public ResponseEntity<List<DepartureSuggestionResponse>> getDepartureSuggestions(
+            @PathVariable UUID id,
+            @RequestBody DepartureSuggestionsRequest request) {
+        User user = getCurrentUser();
+        return ResponseEntity.ok(departureOptimizerService.getDepartureSuggestions(id, request, user));
+    }
+
+    @PostMapping("/{id}/replan")
+    public ResponseEntity<ReplanResponse> replanJourney(
+            @PathVariable UUID id,
+            @RequestBody ReplanRequest request,
+            @RequestParam(defaultValue = "false") boolean confirm) {
+        User user = getCurrentUser();
+        return ResponseEntity.ok(journeyPlanningService.replanJourney(id, request, user, confirm));
+    }
+
+    @GetMapping("/{id}/along-route")
+    public ResponseEntity<List<AlongRoutePoiResponse>> getAlongRoutePoi(
+            @PathVariable UUID id,
+            @RequestParam String category,
+            @RequestParam(name = "max_detour_minutes", defaultValue = "10.0") Double maxDetourMinutes,
+            @RequestParam(name = "max_detour_km", defaultValue = "2.0") Double maxDetourKm) {
+        User user = getCurrentUser();
+        return ResponseEntity.ok(placesService.getAlongRoutePoi(id, category, maxDetourMinutes, maxDetourKm, user));
     }
 }

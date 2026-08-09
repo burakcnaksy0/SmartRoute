@@ -1,5 +1,6 @@
 package com.smartroute.exception;
 
+import com.auth0.jwt.exceptions.JWTVerificationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -45,18 +46,29 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
     }
 
-    @ExceptionHandler(com.auth0.jwt.exceptions.JWTVerificationException.class)
-    public ResponseEntity<Map<String, String>> handleJwtException(com.auth0.jwt.exceptions.JWTVerificationException ex) {
+    @ExceptionHandler(JWTVerificationException.class)
+    public ResponseEntity<Map<String, String>> handleJwtException(JWTVerificationException ex) {
         Map<String, String> response = new HashMap<>();
         response.put("error", "Geçersiz veya süresi dolmuş oturum anahtarı.");
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
     @ExceptionHandler(InfeasiblePlanException.class)
-    public ResponseEntity<Map<String, String>> handleInfeasiblePlan(InfeasiblePlanException ex) {
+    public ResponseEntity<Map<String, Object>> handleInfeasiblePlan(InfeasiblePlanException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("error", ex.getMessage());
+        response.put("errorCode", "INFEASIBLE_PLAN");
+        if (!ex.getConflictingStops().isEmpty()) {
+            response.put("conflictingStops", ex.getConflictingStops());
+        }
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<Map<String, String>> handleRateLimitExceeded(RateLimitExceededException ex) {
         Map<String, String> response = new HashMap<>();
         response.put("error", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
     }
 
     @ExceptionHandler(Exception.class)
