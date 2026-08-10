@@ -12,7 +12,12 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-@Service
+/**
+ * @deprecated Replaced by {@link OsrmRoutingProvider}.
+ * This class is kept for reference only and is NOT registered as a Spring bean.
+ * To re-enable, restore the @Service annotation and remove it from OsrmRoutingProvider.
+ */
+// @Service  — disabled; OsrmRoutingProvider is the active RoutingProvider
 public class GoogleRoutesProvider implements RoutingProvider {
 
     private final RestClient restClient;

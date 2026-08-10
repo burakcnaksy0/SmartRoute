@@ -5,6 +5,7 @@ import com.smartroute.domain.User;
 import com.smartroute.dto.AuthResponse;
 import com.smartroute.dto.LoginRequest;
 import com.smartroute.dto.RegisterRequest;
+import com.smartroute.dto.UserSettingsDto;
 import com.smartroute.exception.EmailAlreadyExistsException;
 import com.smartroute.exception.InvalidCredentialsException;
 import com.smartroute.exception.UserNotFoundException;
@@ -86,5 +87,44 @@ public class UserService {
         } catch (Exception e) {
             throw new InvalidCredentialsException("Oturum yenileme başarısız.");
         }
+    }
+
+    @Transactional(readOnly = true)
+    public UserSettingsDto getSettings(User user) {
+        return new UserSettingsDto(
+            user.getMapProvider(),
+            user.getDistanceUnit(),
+            user.getLanguage(),
+            user.getDepartureAlerts(),
+            user.getServiceDisruptions()
+        );
+    }
+
+    @Transactional
+    public UserSettingsDto updateSettings(UserSettingsDto request, User user) {
+        if (request.getMapProvider() != null) {
+            user.setMapProvider(request.getMapProvider());
+        }
+        if (request.getDistanceUnit() != null) {
+            user.setDistanceUnit(request.getDistanceUnit());
+        }
+        if (request.getLanguage() != null) {
+            user.setLanguage(request.getLanguage());
+        }
+        if (request.getDepartureAlerts() != null) {
+            user.setDepartureAlerts(request.getDepartureAlerts());
+        }
+        if (request.getServiceDisruptions() != null) {
+            user.setServiceDisruptions(request.getServiceDisruptions());
+        }
+        
+        userRepository.save(user);
+        return new UserSettingsDto(
+            user.getMapProvider(),
+            user.getDistanceUnit(),
+            user.getLanguage(),
+            user.getDepartureAlerts(),
+            user.getServiceDisruptions()
+        );
     }
 }

@@ -1,134 +1,196 @@
 import React, { useRef, useEffect } from 'react';
 import {
   StyleSheet,
-  TouchableOpacity,
   View,
   Text,
-  Animated,
   ScrollView,
-  SafeAreaView,
-  StatusBar,
+  Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useJourneyStore } from '@/store/journeyStore';
-import { Colors, Spacing, Rounded } from '@/constants/theme';
+import { useAuthStore } from '@/store/authStore';
+import { Colors, Spacing, Rounded, Shadow, Typography, TabBarHeight } from '@/constants/theme';
+import { ActionCard } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+
+const C = Colors.light;
+
+const STAGGER_DELAY = 60;
 
 export default function JourneyIndexScreen() {
-  const router = useRouter();
-  const colors = Colors.light;
+  const router         = useRouter();
+  const { user }       = useAuthStore();
   const { currentJourney } = useJourneyStore();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Stagger entrance animation
+  const anim0 = useRef(new Animated.Value(0)).current;
+  const anim1 = useRef(new Animated.Value(0)).current;
+  const anim2 = useRef(new Animated.Value(0)).current;
+  const anim3 = useRef(new Animated.Value(0)).current;
+  const anims = [anim0, anim1, anim2, anim3];
+
+  const slide0 = useRef(new Animated.Value(20)).current;
+  const slide1 = useRef(new Animated.Value(20)).current;
+  const slide2 = useRef(new Animated.Value(20)).current;
+  const slide3 = useRef(new Animated.Value(20)).current;
+  const slides = [slide0, slide1, slide2, slide3];
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
+    anims.forEach((anim, i) => {
+      Animated.parallel([
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 400,
+          delay: i * STAGGER_DELAY,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slides[i], {
+          toValue: 0,
+          duration: 350,
+          delay: i * STAGGER_DELAY,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
   }, []);
 
-  return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle="dark-content" />
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: 'rgba(0,0,0,0.04)' }]}>
-        <View style={styles.headerTitleRow}>
-          <Text style={[styles.headerTitle, { color: colors.onSurface }]}>SmartRoute</Text>
-        </View>
-        <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-          <MaterialIcons name="person" size={18} color={colors.onPrimary} />
-        </View>
-      </View>
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Günaydın';
+    if (h < 17) return 'Tünaydın';
+    return 'İyi akşamlar';
+  })();
 
-      <ScrollView 
-        contentContainerStyle={styles.scroll} 
+  const firstName = user?.fullName?.split(' ')[0] ?? 'Ziyaretçi';
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar style="dark" />
+      <ScrollView
+        contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-          {/* Welcome/Hero Section */}
-          <View style={styles.hero}>
-            <View style={[styles.heroIconContainer, { backgroundColor: colors.primaryFixed }]}>
-              <MaterialIcons name="explore" size={36} color={colors.primary} />
-            </View>
-            <Text style={[styles.heroTitle, { color: colors.onSurface }]}>Where to today?</Text>
-            <Text style={[styles.heroSubtitle, { color: colors.outline }]}>
-              Plan your routes, avoid heavy congestion, and optimize departure times with AI.
+        {/* Greeting header */}
+        <Animated.View
+          style={[
+            styles.greetingRow,
+            { opacity: anims[0], transform: [{ translateY: slides[0] }] },
+          ]}
+        >
+          <View style={styles.greetingText}>
+            <Text style={styles.greeting}>{greeting}, {firstName} 👋</Text>
+            <Text style={styles.greetingSub}>Bugün nereye gitmek istersiniz?</Text>
+          </View>
+          <View style={styles.avatarBadge}>
+            <Text style={styles.avatarText}>
+              {user?.fullName
+                ? user.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                : '?'}
             </Text>
           </View>
+        </Animated.View>
 
-          {/* Primary Option: NLP AI Prompt Input */}
-          <TouchableOpacity
-            style={[styles.primaryCard, { backgroundColor: colors.primary }]}
+        {/* Active journey shortcut */}
+        {currentJourney?.status === 'active' && (
+          <Animated.View
+            style={{ opacity: anims[0], transform: [{ translateY: slides[0] }] }}
+          >
+            <View style={styles.activeJourneyBanner}>
+              <View style={styles.activeJourneyLeft}>
+                <View style={styles.activeDot} />
+                <Text style={styles.activeJourneyLabel}>Devam eden yolculuk var</Text>
+              </View>
+              <Button
+                label="Görüntüle"
+                variant="primary"
+                size="sm"
+                onPress={() => router.push('/(tabs)/journey/active-journey' as any)}
+              />
+            </View>
+          </Animated.View>
+        )}
+
+        {/* Primary CTA: AI Journey Builder */}
+        <Animated.View
+          style={{
+            opacity: anims[1],
+            transform: [{ translateY: slides[1] }],
+            marginTop: Spacing.sm,
+          }}
+        >
+          <ActionCard
+            title="Günümü Anlat"
+            description="Günlük planınızı doğal dilde anlatın; yapay zeka konumları ve süreleri çıkararak en uygun rotayı çizsin."
+            icon="auto-awesome"
+            primary
             onPress={() => router.push('/(tabs)/journey/nlp-input' as any)}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.primaryCardIconBg, { backgroundColor: 'rgba(255, 255, 255, 0.15)' }]}>
-              <MaterialIcons name="auto-awesome" size={24} color="#FFFFFF" />
-            </View>
-            <View style={styles.cardContent}>
-              <Text style={styles.primaryCardTitle}>Explain My Day</Text>
-              <Text style={styles.primaryCardDesc}>
-                Describe your stops in one sentence, and let our AI compile the optimal route.
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color="#FFFFFF" style={styles.cardArrow} />
-          </TouchableOpacity>
+          />
+        </Animated.View>
 
-          {/* Secondary Option: Manual Stop selection */}
-          <TouchableOpacity
-            style={[styles.itemCard, { backgroundColor: colors.surface }]}
+        {/* Secondary options */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>VEYA MANUEL OLUŞTURUN</Text>
+        </View>
+
+        <Animated.View
+          style={{
+            opacity: anims[2],
+            transform: [{ translateY: slides[2] }],
+          }}
+        >
+          <ActionCard
+            title="Manuel Planlayıcı"
+            description="Durakları tek tek ekleyin, öncelikleri ve zaman aralıklarını belirleyerek tam kontrol sahibi olun."
+            icon="add-location-alt"
             onPress={() => router.push('/(tabs)/journey/new-stop' as any)}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.itemCardIconBg, { backgroundColor: colors.surfaceLow }]}>
-              <MaterialIcons name="add-location" size={22} color={colors.primary} />
-            </View>
-            <View style={styles.cardContent}>
-              <Text style={[styles.itemCardTitle, { color: colors.onSurface }]}>Manual Route Builder</Text>
-              <Text style={[styles.itemCardDesc, { color: colors.outline }]}>
-                Add address stops manually and configure strict arrival windows.
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color={colors.outline} style={styles.cardArrow} />
-          </TouchableOpacity>
+          />
+        </Animated.View>
 
-          {/* Optional Option: Departure suggestions */}
-          {currentJourney && currentJourney.status === 'planned' && (
-            <TouchableOpacity
-              style={[styles.itemCard, { backgroundColor: colors.surface }]}
+        {/* Departure suggestion (context-aware) */}
+        {currentJourney?.status === 'planned' && (
+          <Animated.View
+            style={{
+              opacity: anims[3],
+              transform: [{ translateY: slides[3] }],
+              marginTop: Spacing.sm,
+            }}
+          >
+            <ActionCard
+              title="Akıllı Çıkış Önerisi"
+              description="Trafik tahmin modellerini kullanarak yola çıkmak için en uygun zamanı bulun."
+              icon="schedule"
+              iconBg={C.tertiaryContainer}
+              iconColor={C.tertiary}
               onPress={() =>
                 router.push({
                   pathname: '/(tabs)/journey/departure-suggestions' as any,
                   params: { journeyId: currentJourney.id },
                 })
               }
-              activeOpacity={0.8}
-            >
-              <View style={[styles.itemCardIconBg, { backgroundColor: colors.surfaceLow }]}>
-                <MaterialIcons name="schedule" size={22} color={colors.primary} />
-              </View>
-              <View style={styles.cardContent}>
-                <Text style={[styles.itemCardTitle, { color: colors.onSurface }]}>Departure Suggestions</Text>
-                <Text style={[styles.itemCardDesc, { color: colors.outline }]}>
-                  Find the optimal departure time to guarantee arrival targets.
-                </Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} style={styles.cardArrow} />
-            </TouchableOpacity>
-          )}
+            />
+          </Animated.View>
+        )}
 
-          {/* Optional Option: Active Plan shortcut */}
-          <TouchableOpacity
-            style={[styles.shortcutBtn, { backgroundColor: colors.surfaceLow }]}
-            onPress={() => router.push('/(tabs)/journey/plan-result' as any)}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="map" size={20} color={colors.primary} />
-            <Text style={[styles.shortcutBtnText, { color: colors.primary }]}>
-              View Current Itinerary Alternatives
+        {/* Quick link to plan result */}
+        <Animated.View
+          style={{
+            opacity: anims[3],
+            transform: [{ translateY: slides[3] }],
+            marginTop: Spacing.sm,
+          }}
+        >
+          <View style={styles.quickLink}>
+            <MaterialIcons name="map" size={18} color={C.textSecondary} />
+            <Text
+              style={styles.quickLinkText}
+              onPress={() => router.push('/(tabs)/journey/plan-result' as any)}
+            >
+              Mevcut alternatif rotaları görüntüle →
             </Text>
-          </TouchableOpacity>
+          </View>
         </Animated.View>
       </ScrollView>
     </SafeAreaView>
@@ -138,141 +200,99 @@ export default function JourneyIndexScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    backgroundColor: C.background,
   },
-  header: {
-    height: 56,
-    paddingHorizontal: Spacing.marginMain,
+  scroll: {
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.xl,
+    paddingBottom: TabBarHeight + Spacing['2xl'],
+    gap: Spacing.md,
+  },
+  // Greeting
+  greetingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
+    marginBottom: Spacing.sm,
   },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    fontFamily: 'System',
-    letterSpacing: -0.4,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scroll: {
-    flexGrow: 1,
-  },
-  container: {
+  greetingText: {
     flex: 1,
-    padding: Spacing.marginMain,
-    paddingTop: Spacing.stackLg,
-    paddingBottom: 100, // Padding for absolute bottom tabs
-    gap: Spacing.stackLg,
+    gap: 4,
   },
-  hero: {
-    alignItems: 'center',
-    gap: 12,
-    marginVertical: Spacing.stackLg,
+  greeting: {
+    ...Typography.h2,
+    color: C.text,
   },
-  heroIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+  greetingSub: {
+    ...Typography.bodyMedium,
+    color: C.textSecondary,
   },
-  heroTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-  },
-  heroSubtitle: {
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 12,
-  },
-  primaryCard: {
-    borderRadius: Rounded.xl,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    shadowColor: 'rgba(42, 20, 180, 0.3)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  primaryCardIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryCardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  primaryCardDesc: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.75)',
-    lineHeight: 18,
-    marginTop: 4,
-  },
-  itemCard: {
-    borderRadius: Rounded.xl,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    shadowColor: 'rgba(0, 0, 0, 0.02)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  itemCardIconBg: {
+  avatarBadge: {
     width: 44,
     height: 44,
     borderRadius: 22,
+    backgroundColor: C.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Shadow.sm,
   },
-  itemCardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: -0.2,
+  avatarText: {
+    color: C.onPrimary,
+    fontSize: 14,
+    fontWeight: '700',
   },
-  itemCardDesc: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 4,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardArrow: {
-    opacity: 0.8,
-  },
-  shortcutBtn: {
+  // Active banner
+  activeJourneyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    backgroundColor: C.primaryFixed,
     borderRadius: Rounded.xl,
-    paddingVertical: 16,
-    marginTop: Spacing.stackSm,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+    borderLeftWidth: 3,
+    borderLeftColor: C.primary,
   },
-  shortcutBtnText: {
-    fontSize: 15,
+  activeJourneyLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  activeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: C.primary,
+  },
+  activeJourneyLabel: {
+    ...Typography.bodyMedium,
+    color: C.primary,
     fontWeight: '600',
+  },
+  // Section header
+  sectionHeader: {
+    marginTop: Spacing.sm,
+    marginBottom: -Spacing.xs,
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: C.outline,
+  },
+  // Quick link
+  quickLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    justifyContent: 'center',
+    paddingVertical: Spacing.sm,
+  },
+  quickLinkText: {
+    ...Typography.bodySmall,
+    color: C.textSecondary,
+    fontWeight: '500',
   },
 });

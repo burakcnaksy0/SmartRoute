@@ -57,10 +57,11 @@ class JourneyNlpParsingServiceTest {
 
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
-        registry.add("anthropic.api.baseUrl", () -> "http://localhost:" + wireMockServer.port());
-        registry.add("anthropic.api.key", () -> "test-anthropic-key");
-        registry.add("google.api.mapsBaseUrl", () -> "http://localhost:" + wireMockServer.port());
-        registry.add("google.api.key", () -> "test-google-key");
+        registry.add("huggingface.api.baseUrl", () -> "http://localhost:" + wireMockServer.port());
+        registry.add("huggingface.api.key", () -> "test-hf-key");
+        registry.add("huggingface.api.model", () -> "meta-llama/Llama-3.1-8B-Instruct");
+        // Point Nominatim to WireMock for geocoding
+        registry.add("osm.nominatim.url", () -> "http://localhost:" + wireMockServer.port());
     }
 
     @BeforeEach
@@ -77,63 +78,49 @@ class JourneyNlpParsingServiceTest {
 
     @Test
     void parseAndGeocode_success() {
-        // Mock Claude response
-        String claudeResponse = "{\n" +
-                "  \"content\": [\n" +
+        // Mock Hugging Face response
+        String hfResponse = "{\n" +
+                "  \"choices\": [\n" +
                 "    {\n" +
-                "      \"type\": \"text\",\n" +
-                "      \"text\": \"{\\n  \\\"startAddressText\\\": \\\"Kadikoy\\\",\\n  \\\"plannedDepartureTime\\\": \\\"2026-08-08T12:00:00\\\",\\n  \\\"stops\\\": [\\n    {\\n      \\\"placeNameRaw\\\": \\\"Gebze Center\\\",\\n      \\\"visitDurationMinutes\\\": 60,\\n      \\\"priority\\\": \\\"high\\\",\\n      \\\"stopType\\\": \\\"poi\\\"\\n    }\\n  ]\\n}\"\n" +
-                "    }\n" +
-                "  ]\n" +
-                "}";
-
-        wireMockServer.stubFor(post(urlEqualTo("/v1/messages"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody(claudeResponse)));
-
-        // Mock Geocoding response for Kadikoy
-        String geocodeKadikoy = "{\n" +
-                "  \"status\": \"OK\",\n" +
-                "  \"results\": [\n" +
-                "    {\n" +
-                "      \"formatted_address\": \"Kadıköy, Istanbul, Turkey\",\n" +
-                "      \"geometry\": {\n" +
-                "        \"location\": {\n" +
-                "          \"lat\": 40.9909,\n" +
-                "          \"lng\": 29.0303\n" +
-                "        }\n" +
+                "      \"message\": {\n" +
+                "        \"role\": \"assistant\",\n" +
+                "        \"content\": \"{\\n  \\\"startAddressText\\\": \\\"Kadikoy\\\",\\n  \\\"plannedDepartureTime\\\": \\\"2026-08-08T12:00:00\\\",\\n  \\\"stops\\\": [\\n    {\\n      \\\"placeNameRaw\\\": \\\"Gebze Center\\\",\\n      \\\"visitDurationMinutes\\\": 60,\\n      \\\"priority\\\": \\\"high\\\",\\n      \\\"stopType\\\": \\\"poi\\\"\\n    }\\n  ]\\n}\"\n" +
                 "      }\n" +
                 "    }\n" +
                 "  ]\n" +
                 "}";
 
-        wireMockServer.stubFor(get(urlPathEqualTo("/maps/api/geocode/json"))
-                .withQueryParam("address", equalTo("Kadikoy"))
+        wireMockServer.stubFor(post(urlEqualTo("/v1/chat/completions"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(hfResponse)));
+
+        // Mock Nominatim geocoding response for Kadikoy
+        String geocodeKadikoy = "[{\n" +
+                "  \"place_id\": 123,\n" +
+                "  \"display_name\": \"Kadıköy, Istanbul, Turkey\",\n" +
+                "  \"lat\": \"40.9909\",\n" +
+                "  \"lon\": \"29.0303\"\n" +
+                "}]";
+
+        wireMockServer.stubFor(get(urlPathEqualTo("/search"))
+                .withQueryParam("q", equalTo("Kadikoy"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody(geocodeKadikoy)));
 
-        // Mock Geocoding response for Gebze Center
-        String geocodeGebze = "{\n" +
-                "  \"status\": \"OK\",\n" +
-                "  \"results\": [\n" +
-                "    {\n" +
-                "      \"formatted_address\": \"Gebze Center, Kocaeli, Turkey\",\n" +
-                "      \"geometry\": {\n" +
-                "        \"location\": {\n" +
-                "          \"lat\": 40.7989,\n" +
-                "          \"lng\": 29.4123\n" +
-                "        }\n" +
-                "      }\n" +
-                "    }\n" +
-                "  ]\n" +
-                "}";
+        // Mock Nominatim geocoding response for Gebze Center
+        String geocodeGebze = "[{\n" +
+                "  \"place_id\": 456,\n" +
+                "  \"display_name\": \"Gebze Center, Kocaeli, Turkey\",\n" +
+                "  \"lat\": \"40.7989\",\n" +
+                "  \"lon\": \"29.4123\"\n" +
+                "}]";
 
-        wireMockServer.stubFor(get(urlPathEqualTo("/maps/api/geocode/json"))
-                .withQueryParam("address", equalTo("Gebze Center"))
+        wireMockServer.stubFor(get(urlPathEqualTo("/search"))
+                .withQueryParam("q", equalTo("Gebze Center"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
@@ -143,12 +130,12 @@ class JourneyNlpParsingServiceTest {
 
         assertNotNull(request);
         assertEquals("Kadikoy", request.getStartAddressText());
-        assertEquals(40.9909, request.getStartLat());
-        assertEquals(29.0303, request.getStartLng());
+        assertEquals(40.9909, request.getStartLat(), 0.001);
+        assertEquals(29.0303, request.getStartLng(), 0.001);
         assertEquals(1, request.getStops().size());
         assertEquals("Gebze Center", request.getStops().get(0).getPlaceName());
-        assertEquals(40.7989, request.getStops().get(0).getLat());
-        assertEquals(29.4123, request.getStops().get(0).getLng());
+        assertEquals(40.7989, request.getStops().get(0).getLat(), 0.001);
+        assertEquals(29.4123, request.getStops().get(0).getLng(), 0.001);
         assertEquals(60, request.getStops().get(0).getVisitDurationMinutes());
     }
 
@@ -165,21 +152,23 @@ class JourneyNlpParsingServiceTest {
 
     @Test
     void parseAndGeocode_invalidLlmJson() {
-        // Claude returns invalid text structure
-        String claudeInvalidResponse = "{\n" +
-                "  \"content\": [\n" +
+        // Hugging Face returns invalid text structure
+        String hfInvalidResponse = "{\n" +
+                "  \"choices\": [\n" +
                 "    {\n" +
-                "      \"type\": \"text\",\n" +
-                "      \"text\": \"Bu bir JSON değil, hata verecek metin.\"\n" +
+                "      \"message\": {\n" +
+                "        \"role\": \"assistant\",\n" +
+                "        \"content\": \"Bu bir JSON değil, hata verecek metin.\"\n" +
+                "      }\n" +
                 "    }\n" +
                 "  ]\n" +
                 "}";
 
-        wireMockServer.stubFor(post(urlEqualTo("/v1/messages"))
+        wireMockServer.stubFor(post(urlEqualTo("/v1/chat/completions"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody(claudeInvalidResponse)));
+                        .withBody(hfInvalidResponse)));
 
         RuntimeException ex = assertThrows(RuntimeException.class, () ->
                 journeyNlpParsingService.parseAndGeocode("some text", testUser)
@@ -189,7 +178,7 @@ class JourneyNlpParsingServiceTest {
 
     @Test
     void parseAndGeocode_llmApiTimeoutOrError() {
-        wireMockServer.stubFor(post(urlEqualTo("/v1/messages"))
+        wireMockServer.stubFor(post(urlEqualTo("/v1/chat/completions"))
                 .willReturn(aResponse()
                         .withStatus(500)));
 

@@ -72,10 +72,13 @@ export interface JourneyPlan {
   totalDistanceMeters: number;
   totalTollCost: number;
   totalFuelCostEstimate: number;
+  estimatedEnergyCost?: number;
   trafficRiskScore: number;
   overallScore: number;
   isSelected: boolean;
   explanationText?: string;
+  requiresChargingStop?: boolean;
+  chargingStopCount?: number;
   legs: PlanLeg[];
 }
 
@@ -112,9 +115,25 @@ export interface ReplanResponse {
   proposedPlan?: JourneyPlan;
 }
 
+export interface JourneyStatistics {
+  totalTrips: number;
+  totalDistanceKm: number;
+  totalSavingsEur: number;
+}
+
 // ─── API Functions ────────────────────────────────────────────────────────────
 
 export const journeyApi = {
+  getJourneys: async (): Promise<Journey[]> => {
+    const response = await api.get<Journey[]>('/journeys');
+    return response.data;
+  },
+
+  getStatistics: async (): Promise<JourneyStatistics> => {
+    const response = await api.get<JourneyStatistics>('/journeys/statistics');
+    return response.data;
+  },
+
   parseNlp: async (text: string): Promise<NlpParseResult> => {
     const response = await api.post<NlpParseResult>('/journeys/parse-nlp', { text });
     return response.data;

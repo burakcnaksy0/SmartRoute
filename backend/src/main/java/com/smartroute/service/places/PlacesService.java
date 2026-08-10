@@ -21,14 +21,14 @@ public class PlacesService {
 
     private final JourneyRepository journeyRepository;
     private final JourneyStopRepository journeyStopRepository;
-    private final GooglePlacesProvider googlePlacesProvider;
+    private final OsmPlacesProvider osmPlacesProvider;
 
     public PlacesService(JourneyRepository journeyRepository,
                          JourneyStopRepository journeyStopRepository,
-                         GooglePlacesProvider googlePlacesProvider) {
+                         OsmPlacesProvider osmPlacesProvider) {
         this.journeyRepository = journeyRepository;
         this.journeyStopRepository = journeyStopRepository;
-        this.googlePlacesProvider = googlePlacesProvider;
+        this.osmPlacesProvider = osmPlacesProvider;
     }
 
     public List<AlongRoutePoiResponse> getAlongRoutePoi(UUID journeyId, String category, Double maxDetourMinutes, Double maxDetourKm, User user) {
@@ -87,7 +87,7 @@ public class PlacesService {
 
         Map<String, GooglePlaceResult> uniquePois = new HashMap<>();
         for (double[] point : sampledPoints) {
-            List<GooglePlaceResult> pois = googlePlacesProvider.searchNearby(point[0], point[1], radius, type);
+            List<GooglePlaceResult> pois = osmPlacesProvider.searchNearby(point[0], point[1], radius, type);
             for (GooglePlaceResult poi : pois) {
                 uniquePois.put(poi.getPlaceId(), poi);
             }
@@ -140,7 +140,7 @@ public class PlacesService {
             throw new RuntimeException("Unauthorized access to journey stop");
         }
 
-        List<GooglePlaceResult> parkingLots = googlePlacesProvider.searchNearby(stop.getLat(), stop.getLng(), 800, "parking");
+        List<GooglePlaceResult> parkingLots = osmPlacesProvider.searchNearby(stop.getLat(), stop.getLng(), 800, "parking");
 
         // Calculate planned arrival time (ETA) of this stop in the active/selected plan
         LocalDateTime routeArrivalTime = calculateStopRouteArrivalTime(stop);
@@ -274,5 +274,16 @@ public class PlacesService {
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
         return R * c; // meters
+    }
+
+    public List<GooglePlaceResult> searchPlaces(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        return osmPlacesProvider.textSearch(query);
+    }
+
+    public String reverseGeocode(double lat, double lng) {
+        return osmPlacesProvider.reverseGeocode(lat, lng);
     }
 }

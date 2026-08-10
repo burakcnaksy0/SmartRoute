@@ -11,7 +11,11 @@ import org.springframework.web.client.RestClient;
 import java.util.ArrayList;
 import java.util.List;
 
-@Service
+/**
+ * @deprecated Replaced by {@link OsmPlacesProvider}.
+ * Kept for reference; NOT registered as a Spring bean.
+ */
+// @Service  — disabled; OsmPlacesProvider is the active provider
 public class GooglePlacesProvider {
 
     private static final Logger log = LoggerFactory.getLogger(GooglePlacesProvider.class);
@@ -73,5 +77,66 @@ public class GooglePlacesProvider {
         }
 
         return results;
+    }
+
+    public List<GooglePlaceResult> textSearch(String query) {
+        String url = mapsBaseUrl + "/maps/api/place/textsearch/json?query={query}&key={key}";
+        List<GooglePlaceResult> results = new ArrayList<>();
+
+        try {
+            JsonNode response = restClient.get()
+                    .uri(url, query, apiKey)
+                    .retrieve()
+                    .body(JsonNode.class);
+
+            if (response != null && "OK".equals(response.get("status").asText())) {
+                JsonNode resultsNode = response.get("results");
+                if (resultsNode != null && resultsNode.isArray()) {
+                    for (JsonNode node : resultsNode) {
+                        GooglePlaceResult item = new GooglePlaceResult();
+                        item.setPlaceId(node.get("place_id").asText());
+                        item.setName(node.get("name").asText());
+                        item.setVicinity(node.has("formatted_address") ? node.get("formatted_address").asText() : "");
+                        
+                        JsonNode loc = node.get("geometry").get("location");
+                        item.setLat(loc.get("lat").asDouble());
+                        item.setLng(loc.get("lng").asDouble());
+                        
+                        if (node.has("rating")) {
+                            item.setRating(node.get("rating").asDouble());
+                        }
+                        if (node.has("user_ratings_total")) {
+                            item.setUserRatingsTotal(node.get("user_ratings_total").asInt());
+                        }
+                        results.add(item);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Google Places Text Search error: ", e);
+        }
+
+        return results;
+    }
+
+    public String reverseGeocode(double lat, double lng) {
+        String url = mapsBaseUrl + "/maps/api/geocode/json?latlng={latlng}&key={key}";
+        String latlngStr = lat + "," + lng;
+        try {
+            JsonNode response = restClient.get()
+                    .uri(url, latlngStr, apiKey)
+                    .retrieve()
+                    .body(JsonNode.class);
+
+            if (response != null && "OK".equals(response.get("status").asText())) {
+                JsonNode resultsNode = response.get("results");
+                if (resultsNode != null && resultsNode.isArray() && resultsNode.size() > 0) {
+                    return resultsNode.get(0).get("formatted_address").asText();
+                }
+            }
+        } catch (Exception e) {
+            log.error("Google Geocoding error: ", e);
+        }
+        return "Unknown Location";
     }
 }

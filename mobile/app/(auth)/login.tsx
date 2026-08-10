@@ -1,40 +1,44 @@
 import React, { useState } from 'react';
 import {
   StyleSheet,
-  TouchableOpacity,
-  TextInput,
   View,
+  Text,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
+  TouchableOpacity,
+  ScrollView,
 } from 'react-native';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/api/auth';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors, Spacing, Rounded, Shadow, Typography } from '@/constants/theme';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { ErrorBanner } from '@/components/ui/States';
+
+const C = Colors.light;
 
 export default function LoginScreen() {
-  const router = useRouter();
-  const setAuth = useAuthStore((state) => state.setAuth);
+  const router   = useRouter();
+  const setAuth  = useAuthStore((s) => s.setAuth);
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [email,     setEmail]     = useState('');
+  const [password,  setPassword]  = useState('');
+  const [showPass,  setShowPass]  = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+  const [error,     setError]     = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
     setError(null);
-
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email.trim())) {
       setError('Lütfen geçerli bir e-posta adresi girin.');
       return;
     }
-
-    // Password validation
     if (!password || password.length < 6) {
       setError('Şifreniz en az 6 karakter olmalıdır.');
       return;
@@ -42,22 +46,13 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      const response = await authApi.login({
-        email: email.trim(),
-        password,
-      });
-
-      await setAuth(
-        response.accessToken,
-        response.refreshToken,
-        {
-          id: response.userId,
-          email: response.email,
-          fullName: response.fullName,
-        }
-      );
+      const response = await authApi.login({ email: email.trim(), password });
+      await setAuth(response.accessToken, response.refreshToken, {
+        id:       response.userId,
+        email:    response.email,
+        fullName: response.fullName,
+      }, rememberMe);
     } catch (err: any) {
-      console.error(err);
       if (err.response?.data?.error) {
         setError(err.response.data.error);
       } else if (err.response?.status === 401) {
@@ -71,37 +66,50 @@ export default function LoginScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={styles.root}>
+      <StatusBar style="dark" />
+      <View style={styles.decorBlob} />
+
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
       >
-        <SafeAreaView style={styles.innerContainer}>
-          <View style={styles.header}>
-            <View style={styles.logoBadge}>
-              <ThemedText style={styles.logoText}>SR</ThemedText>
-            </View>
-            <ThemedText type="title" style={styles.title}>
-              SmartRoute
-            </ThemedText>
-            <ThemedText style={styles.subtitle}>
-              Yolculuklarınızı optimize etmek için giriş yapın
-            </ThemedText>
-          </View>
+        <SafeAreaView style={styles.safeArea}>
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Back */}
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => router.back()}
+              accessibilityRole="button"
+              accessibilityLabel="Geri git"
+            >
+              <MaterialIcons name="chevron-left" size={24} color={C.primary} />
+              <Text style={styles.backText}>Geri</Text>
+            </TouchableOpacity>
 
-          <View style={styles.form}>
-            {error && (
-              <View style={styles.errorBanner}>
-                <ThemedText style={styles.errorText}>{error}</ThemedText>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.logoMark}>
+                <MaterialIcons name="explore" size={28} color={C.onPrimary} />
               </View>
-            )}
+              <Text style={styles.title}>Tekrar Hoş Geldiniz</Text>
+              <Text style={styles.subtitle}>
+                Yolculuklarınıza devam etmek için giriş yapın
+              </Text>
+            </View>
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={styles.label}>E-Posta Adresi</ThemedText>
-              <TextInput
-                style={styles.input}
-                placeholder="ornek@domain.com"
-                placeholderTextColor="#64748B"
+            {/* Form */}
+            <View style={styles.form}>
+              {error && <ErrorBanner message={error} />}
+
+              <Input
+                label="E-posta Adresi"
+                icon="email"
+                placeholder="you@example.com"
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -109,172 +117,177 @@ export default function LoginScreen() {
                 autoCorrect={false}
                 editable={!isLoading}
               />
-            </View>
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={styles.label}>Şifre</ThemedText>
-              <TextInput
-                style={styles.input}
+              <Input
+                label="Şifre"
+                icon="lock"
+                iconRight={showPass ? 'visibility-off' : 'visibility'}
+                onIconRightPress={() => setShowPass(v => !v)}
                 placeholder="••••••••"
-                placeholderTextColor="#64748B"
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
+                secureTextEntry={!showPass}
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!isLoading}
               />
+
+              {/* Beni Hatırla Checkbox */}
+              <TouchableOpacity
+                style={styles.rememberMeContainer}
+                onPress={() => setRememberMe(!rememberMe)}
+                activeOpacity={0.7}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: rememberMe }}
+                accessibilityLabel="Beni Hatırla"
+              >
+                <View style={[
+                  styles.checkbox,
+                  rememberMe && styles.checkboxChecked
+                ]}>
+                  {rememberMe && <MaterialIcons name="check" size={14} color={C.onPrimary} />}
+                </View>
+                <Text style={styles.rememberMeText}>Beni Hatırla</Text>
+              </TouchableOpacity>
+
+              <Button
+                label="Giriş Yap"
+                onPress={handleLogin}
+                loading={isLoading}
+                disabled={isLoading}
+                fullWidth
+                size="lg"
+                style={styles.loginBtn}
+              />
             </View>
 
-            <TouchableOpacity
-              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-              onPress={handleLogin}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <ThemedText style={styles.loginButtonText}>Giriş Yap</ThemedText>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.registerLink}
-              onPress={() => router.push('/(auth)/register')}
-              disabled={isLoading}
-            >
-              <ThemedText style={styles.registerLinkText}>
-                Hesabınız yok mu? <ThemedText style={styles.registerLinkHighlight}>Kayıt Olun</ThemedText>
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Hesabınız yok mu?</Text>
+              <TouchableOpacity
+                onPress={() => router.push('/(auth)/register')}
+                disabled={isLoading}
+                accessibilityRole="button"
+              >
+                <Text style={styles.footerLink}>Hesap Oluştur</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: C.background,
+  },
+  decorBlob: {
+    position: 'absolute',
+    top: -60,
+    right: -40,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: C.primaryFixed,
+    opacity: 0.6,
   },
   keyboardView: {
     flex: 1,
   },
-  innerContainer: {
+  safeArea: {
     flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: 'space-between',
+  },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: Spacing.gutter,
+    paddingBottom: Spacing['3xl'],
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: Spacing.sm,
+    alignSelf: 'flex-start',
+    paddingVertical: Spacing.sm,
+    paddingRight: Spacing.sm,
+  },
+  backText: {
+    ...Typography.bodyMedium,
+    color: C.primary,
   },
   header: {
     alignItems: 'center',
-    marginTop: 40,
-    gap: 8,
+    gap: Spacing.sm,
+    marginTop: Spacing.xl,
+    marginBottom: Spacing['2xl'],
   },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: '#2563EB',
-    justifyContent: 'center',
+  logoMark: {
+    width: 68,
+    height: 68,
+    borderRadius: Rounded['2xl'],
+    backgroundColor: C.primary,
     alignItems: 'center',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
-    marginBottom: 8,
-  },
-  logoText: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+    justifyContent: 'center',
+    ...Shadow.primary,
+    marginBottom: Spacing.xs,
   },
   title: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    ...Typography.h1,
+    color: C.text,
+    textAlign: 'center',
   },
   subtitle: {
-    color: '#94A3B8',
-    fontSize: 14,
-    fontWeight: '500',
+    ...Typography.bodyMedium,
+    color: C.textSecondary,
     textAlign: 'center',
   },
   form: {
-    gap: 16,
-    width: '100%',
+    gap: Spacing.base,
   },
-  errorBanner: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
-    borderRadius: 12,
-    padding: 12,
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginVertical: Spacing.xs,
   },
-  errorText: {
-    color: '#FCA5A5',
-    fontSize: 14,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  inputContainer: {
-    gap: 6,
-  },
-  label: {
-    color: '#CBD5E1',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: '#F1F5F9',
-    fontSize: 16,
-  },
-  loginButton: {
-    backgroundColor: '#2563EB',
-    paddingVertical: 16,
-    borderRadius: 12,
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: Rounded.xs,
+    borderWidth: 1.5,
+    borderColor: C.outline,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
-    marginTop: 8,
   },
-  loginButtonDisabled: {
-    backgroundColor: 'rgba(37, 99, 235, 0.5)',
+  checkboxChecked: {
+    backgroundColor: C.primary,
+    borderColor: C.primary,
   },
-  loginButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+  rememberMeText: {
+    ...Typography.bodySmall,
+    color: C.textSecondary,
+    fontWeight: '500',
+  },
+  loginBtn: {
+    marginTop: Spacing.sm,
   },
   footer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing['2xl'],
   },
-  registerLink: {
-    padding: 8,
+  footerText: {
+    ...Typography.body,
+    color: C.textSecondary,
   },
-  registerLinkText: {
-    color: '#94A3B8',
-    fontSize: 14,
-  },
-  registerLinkHighlight: {
-    color: '#38BDF8',
+  footerLink: {
+    ...Typography.body,
+    color: C.primary,
     fontWeight: '600',
   },
 });

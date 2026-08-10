@@ -93,6 +93,10 @@ public class JourneyPlanResponse {
         this.explanation = explanation;
     }
 
+    public String getExplanationText() {
+        return explanation;
+    }
+
     public List<String> getStopOrder() {
         return stopOrder;
     }

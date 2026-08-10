@@ -1,11 +1,20 @@
 import { Tabs, useRouter } from 'expo-router';
-import { Colors } from '@/constants/theme';
+import { Colors, Rounded, Shadow, Spacing, TabBarHeight, Typography } from '@/constants/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { View, Platform, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  View,
+  Platform,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+} from 'react-native';
 import { useJourneyStore } from '@/store/journeyStore';
+import { useRef, useEffect } from 'react';
+
+const C = Colors.light;
 
 export default function TabLayout() {
-  const colors = Colors.light; // We strictly align with the light iOS design tokens
   const router = useRouter();
   const { currentJourney, completedStopIds } = useJourneyStore();
 
@@ -15,140 +24,227 @@ export default function TabLayout() {
   );
   const nextStop = stopsSorted.find(s => !completedStopIds.includes(s.id));
 
+  // Active journey banner animation
+  const stripAnim  = useRef(new Animated.Value(0)).current;
+  const stripScale = useRef(new Animated.Value(0.95)).current;
+
+  useEffect(() => {
+    if (isActive && nextStop) {
+      Animated.parallel([
+        Animated.spring(stripAnim, { toValue: 1, useNativeDriver: true, damping: 16, stiffness: 120 }),
+        Animated.spring(stripScale, { toValue: 1, useNativeDriver: true, damping: 16, stiffness: 120 }),
+      ]).start();
+    } else {
+      Animated.timing(stripAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [isActive, nextStop?.id]);
+
+  const stripBottom = Platform.OS === 'ios' ? 98 : 78;
+
   return (
     <View style={{ flex: 1 }}>
-      <Tabs screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.outline,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
-          fontFamily: 'System',
-        },
-        tabBarStyle: {
-          backgroundColor: 'rgba(255, 255, 255, 0.85)',
-          borderTopWidth: 1,
-          borderTopColor: 'rgba(0, 0, 0, 0.04)',
-          elevation: 0,
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: Platform.OS === 'ios' ? 88 : 64,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 10,
-          paddingTop: 8,
-        }
-      }}>
-        <Tabs.Screen 
-          name="journey" 
-          options={{ 
-            title: 'Journey',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialIcons name="explore" size={size || 24} color={color} />
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: C.primary,
+          tabBarInactiveTintColor: C.outline,
+          tabBarLabelStyle: {
+            ...Typography.caption,
+            fontWeight: '600',
+            marginTop: -2,
+          },
+          tabBarStyle: {
+            backgroundColor: 'rgba(255, 255, 255, 0.96)',
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: C.outlineVariant,
+            elevation: 0,
+            shadowColor: '#0F1523',
+            shadowOffset: { width: 0, height: -1 },
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: TabBarHeight,
+            paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+            paddingTop: 8,
+          },
+          tabBarIconStyle: {
+            marginTop: 2,
+          },
+        }}
+      >
+        <Tabs.Screen
+          name="journey"
+          options={{
+            title: 'Yolculuk',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon name="explore" color={color} focused={focused} />
             ),
-          }} 
+          }}
         />
-        <Tabs.Screen 
-          name="history" 
-          options={{ 
-            title: 'Activity',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialIcons name="history" size={size || 24} color={color} />
+        <Tabs.Screen
+          name="history"
+          options={{
+            title: 'Geçmiş',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon name="history" color={color} focused={focused} />
             ),
-          }} 
+          }}
         />
-        <Tabs.Screen 
-          name="vehicles" 
-          options={{ 
-            title: 'Vehicles',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialIcons name="directions-car" size={size || 24} color={color} />
+        <Tabs.Screen
+          name="vehicles"
+          options={{
+            title: 'Araçlar',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon name="directions-car" color={color} focused={focused} />
             ),
-          }} 
+          }}
         />
-        <Tabs.Screen 
-          name="profile" 
-          options={{ 
-            title: 'Settings',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialIcons name="settings" size={size || 24} color={color} />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: 'Ayarlar',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon name="settings" color={color} focused={focused} />
             ),
-          }} 
+          }}
         />
       </Tabs>
-
+ 
+      {/* Active journey floating strip */}
       {isActive && nextStop && (
-        <TouchableOpacity
-          style={[styles.stripContainer, { bottom: Platform.OS === 'ios' ? 100 : 76 }]}
-          onPress={() => router.push('/(tabs)/journey/active-journey' as any)}
-          activeOpacity={0.9}
+        <Animated.View
+          style={[
+            styles.stripWrapper,
+            {
+              bottom: stripBottom,
+              opacity: stripAnim,
+              transform: [{ scale: stripScale }],
+            },
+          ]}
         >
-          <View style={styles.stripContent}>
-            <Text style={styles.stripIcon}>🧭</Text>
-            <View style={styles.stripTextContainer}>
-              <Text style={styles.stripTitle}>Aktif Yolculuk Devam Ediyor</Text>
-              <Text style={styles.stripSubtitle} numberOfLines={1}>
-                Sıradaki Durak: {nextStop.placeName}
-              </Text>
+          <TouchableOpacity
+            style={styles.strip}
+            onPress={() => router.push('/(tabs)/journey/active-journey' as any)}
+            activeOpacity={0.9}
+          >
+            <View style={styles.stripLeft}>
+              <View style={styles.stripPulse}>
+                <View style={styles.stripPulseDot} />
+              </View>
+              <View style={styles.stripText}>
+                <Text style={styles.stripLabel}>AKTİF YOLCULUK</Text>
+                <Text style={styles.stripNext} numberOfLines={1}>
+                  Sıradaki: {nextStop.placeName}
+                </Text>
+              </View>
             </View>
-          </View>
-          <Text style={styles.stripArrow}>➔</Text>
-        </TouchableOpacity>
+            <View style={styles.stripChevron}>
+              <MaterialIcons name="chevron-right" size={20} color={C.primary} />
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  stripContainer: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
+/**
+ * Custom tab icon with active indicator dot
+ */
+function TabIcon({
+  name,
+  color,
+  focused,
+}: {
+  name: keyof typeof MaterialIcons.glyphMap;
+  color: string;
+  focused: boolean;
+}) {
+  return (
+    <View style={tabIconStyles.container}>
+      <MaterialIcons name={name} size={24} color={color} />
+      {focused && <View style={tabIconStyles.dot} />}
+    </View>
+  );
+}
+
+const tabIconStyles = StyleSheet.create({
+  container: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: '#3B82F640',
+    gap: 3,
   },
-  stripContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  stripIcon: {
-    fontSize: 20,
-  },
-  stripTextContainer: {
-    flex: 1,
-  },
-  stripTitle: {
-    color: '#3B82F6',
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  stripSubtitle: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  stripArrow: {
-    color: '#3B82F6',
-    fontSize: 16,
-    fontWeight: 'bold',
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.primary,
   },
 });
 
+const styles = StyleSheet.create({
+  stripWrapper: {
+    position: 'absolute',
+    left: Spacing.base,
+    right: Spacing.base,
+  },
+  strip: {
+    backgroundColor: C.surface,
+    borderRadius: Rounded.xl,
+    paddingVertical: Spacing.sm + 4,
+    paddingHorizontal: Spacing.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...Shadow.lg,
+    borderWidth: 1,
+    borderColor: C.primaryFixed,
+  },
+  stripLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    flex: 1,
+  },
+  stripPulse: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: C.primaryFixed,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  stripPulseDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: C.primary,
+  },
+  stripText: {
+    flex: 1,
+    gap: 2,
+  },
+  stripLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: C.primary,
+  },
+  stripNext: {
+    ...Typography.h4,
+    color: C.text,
+    fontSize: 14,
+  },
+  stripChevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: C.primaryFixed,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

@@ -119,7 +119,7 @@ function StopCard({ stop, index, total, isManualOverride, onMoveUp, onMoveDown, 
         <View style={styles.cardMeta}>
           <View style={styles.metaBadge}>
             <MaterialIcons name="schedule" size={14} color={colors.outline} />
-            <Text style={[styles.cardMetaText, { color: colors.outline }]}>{stop.visitDurationMinutes} min</Text>
+            <Text style={[styles.cardMetaText, { color: colors.outline }]}>{stop.visitDurationMinutes} dk</Text>
           </View>
           {hasWindow && (
             <View style={styles.metaBadge}>

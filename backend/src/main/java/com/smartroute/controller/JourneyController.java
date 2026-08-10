@@ -105,4 +105,16 @@ public class JourneyController {
         User user = getCurrentUser();
         return ResponseEntity.ok(placesService.getAlongRoutePoi(id, category, maxDetourMinutes, maxDetourKm, user));
     }
+
+    @GetMapping
+    public ResponseEntity<List<JourneyResponse>> getUserJourneys() {
+        User user = getCurrentUser();
+        return ResponseEntity.ok(journeyPlanningService.getUserJourneys(user));
+    }
+
+    @GetMapping("/statistics")
+    public ResponseEntity<JourneyStatisticsResponse> getJourneyStatistics() {
+        User user = getCurrentUser();
+        return ResponseEntity.ok(journeyPlanningService.getJourneyStatistics(user));
+    }
 }

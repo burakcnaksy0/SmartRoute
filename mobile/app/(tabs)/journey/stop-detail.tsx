@@ -14,7 +14,9 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useJourneyStore } from '@/store/journeyStore';
-import { Colors, Spacing, Rounded } from '@/constants/theme';
+import { Colors, Spacing, Rounded, Shadow } from '@/constants/theme';
+import { ScreenHeader } from '@/components/ui/Header';
+import { Button } from '@/components/ui/Button';
 
 type Priority = 'critical' | 'high' | 'normal' | 'low';
 type StopType = 'errand' | 'meeting' | 'poi' | 'parking' | 'pickup';
@@ -142,18 +144,7 @@ export default function StopDetailScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="dark-content" />
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: 'rgba(0,0,0,0.04)' }]}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => router.back()}
-          accessibilityLabel="Back"
-        >
-          <MaterialIcons name="chevron-left" size={28} color={colors.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Stop Details</Text>
-        <View style={styles.backButton} />
-      </View>
+      <ScreenHeader title="Durak Detayları" />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Place Header Card */}
@@ -167,7 +158,7 @@ export default function StopDetailScreen() {
           </View>
           <View style={styles.placeHeaderInfo}>
             <Text style={[styles.placeName, { color: colors.onSurface }]} numberOfLines={2}>
-              {placeName || 'Unnamed Stop'}
+              {placeName || 'İsimsiz Durak'}
             </Text>
             <Text style={[styles.placeAddress, { color: colors.outline }]}>
               {lat.toFixed(4)}, {lng.toFixed(4)}
@@ -177,7 +168,7 @@ export default function StopDetailScreen() {
 
         {/* Section: Visit Duration */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Visit Duration</Text>
+          <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Ziyaret Süresi</Text>
           <View style={[styles.durationStepper, { backgroundColor: colors.surface }]}>
             <TouchableOpacity 
               style={[styles.stepperBtn, { backgroundColor: colors.surfaceContainer }]} 
@@ -185,7 +176,7 @@ export default function StopDetailScreen() {
             >
               <MaterialIcons name="remove" size={22} color={colors.onSurface} />
             </TouchableOpacity>
-            <Text style={[styles.durationText, { color: colors.onSurface }]}>{duration} min</Text>
+            <Text style={[styles.durationText, { color: colors.onSurface }]}>{duration} dk</Text>
             <TouchableOpacity 
               style={[styles.stepperBtn, { backgroundColor: colors.surfaceContainer }]} 
               onPress={incrementDuration}
@@ -199,8 +190,8 @@ export default function StopDetailScreen() {
         <View style={styles.section}>
           <View style={styles.toggleRow}>
             <View>
-              <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Arrive By</Text>
-              <Text style={[styles.sectionSub, { color: colors.outline }]}>Specify strict arrival window</Text>
+              <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Varış Zamanı</Text>
+              <Text style={[styles.sectionSub, { color: colors.outline }]}>Belirli bir zaman aralığı tanımlayın</Text>
             </View>
             <Switch
               value={hasWindow}
@@ -213,7 +204,7 @@ export default function StopDetailScreen() {
           {hasWindow && (
             <View style={[styles.timeWindowContainer, { backgroundColor: colors.surface }]}>
               <View style={styles.timeInputRow}>
-                <Text style={[styles.timeInputLabel, { color: colors.outline }]}>Start Time</Text>
+                <Text style={[styles.timeInputLabel, { color: colors.outline }]}>Başlangıç</Text>
                 <TextInput
                   style={[styles.timeInput, errors.windowStart ? styles.inputError : null, { color: colors.onSurface, backgroundColor: colors.surfaceLow }]}
                   value={windowStart}
@@ -225,7 +216,7 @@ export default function StopDetailScreen() {
               {errors.windowStart && <Text style={[styles.errorText, { color: colors.error }]}>{errors.windowStart}</Text>}
 
               <View style={[styles.timeInputRow, { marginTop: 12 }]}>
-                <Text style={[styles.timeInputLabel, { color: colors.outline }]}>End Time</Text>
+                <Text style={[styles.timeInputLabel, { color: colors.outline }]}>Bitiş</Text>
                 <TextInput
                   style={[styles.timeInput, errors.windowEnd ? styles.inputError : null, { color: colors.onSurface, backgroundColor: colors.surfaceLow }]}
                   value={windowEnd}
@@ -241,13 +232,13 @@ export default function StopDetailScreen() {
 
         {/* Section: Stop Priority Segmented Control */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Stop Priority</Text>
+          <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Durak Önceliği</Text>
           <View style={[styles.segmentedControl, { backgroundColor: colors.surfaceLow }]}>
             {(['low', 'normal', 'high'] as Priority[]).map((p) => {
               const isActive = priority === p;
-              let label = 'Medium';
-              if (p === 'low') label = 'Low';
-              if (p === 'high') label = 'High';
+              let label = 'Orta';
+              if (p === 'low') label = 'Düşük';
+              if (p === 'high') label = 'Yüksek';
 
               return (
                 <TouchableOpacity
@@ -276,7 +267,7 @@ export default function StopDetailScreen() {
             >
               <MaterialIcons name="warning" size={18} color={colors.error} />
               <Text style={[styles.criticalToggleText, { color: colors.error }]}>
-                Make Priority Critical (Zorunlu)
+                Önceliği Kritik Yap (Zorunlu)
               </Text>
             </TouchableOpacity>
           )}
@@ -287,7 +278,7 @@ export default function StopDetailScreen() {
             >
               <MaterialIcons name="warning" size={18} color={colors.error} />
               <Text style={[styles.criticalToggleText, { color: colors.onErrorContainer }]}>
-                Critical Priority Active (En yüksek öncelik)
+                Kritik Öncelik Aktif (En yüksek öncelik)
               </Text>
             </TouchableOpacity>
           )}
@@ -295,7 +286,7 @@ export default function StopDetailScreen() {
 
         {/* Section: Parking Preference */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Parking Preference</Text>
+          <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Otopark Tercihi</Text>
           <View style={styles.chipsRow}>
             <TouchableOpacity
               style={[
@@ -307,7 +298,7 @@ export default function StopDetailScreen() {
             >
               <MaterialIcons name="directions" size={18} color={parkingPref === 'street' ? colors.primary : colors.outline} />
               <Text style={[styles.chipText, { color: colors.outline }, parkingPref === 'street' && { color: colors.primary, fontWeight: '600' }]}>
-                Street
+                Sokak
               </Text>
             </TouchableOpacity>
 
@@ -321,7 +312,7 @@ export default function StopDetailScreen() {
             >
               <MaterialIcons name="garage" size={18} color={parkingPref === 'garage' ? colors.primary : colors.outline} />
               <Text style={[styles.chipText, { color: colors.outline }, parkingPref === 'garage' && { color: colors.primary, fontWeight: '600' }]}>
-                Garage
+                Garaj
               </Text>
             </TouchableOpacity>
 
@@ -335,7 +326,7 @@ export default function StopDetailScreen() {
             >
               <MaterialIcons name="block" size={18} color={parkingPref === 'none' ? colors.primary : colors.outline} />
               <Text style={[styles.chipText, { color: colors.outline }, parkingPref === 'none' && { color: colors.primary, fontWeight: '600' }]}>
-                None
+                Yok
               </Text>
             </TouchableOpacity>
           </View>
@@ -343,23 +334,23 @@ export default function StopDetailScreen() {
 
         {/* Action Buttons */}
         <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: colors.primary }]}
+          <Button
+            label="Detayları Kaydet"
+            variant="primary"
+            size="lg"
+            fullWidth
             onPress={handleSave}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.saveBtnText, { color: colors.onPrimary }]}>Save Stop Details</Text>
-          </TouchableOpacity>
+          />
 
           {existingIndex >= 0 && (
-            <TouchableOpacity
-              style={[styles.removeBtn, { backgroundColor: colors.errorContainer }]}
+            <Button
+              label="Durağı Kaldır"
+              variant="danger"
+              size="lg"
+              fullWidth
+              icon="delete"
               onPress={handleRemove}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="delete" size={20} color={colors.error} />
-              <Text style={[styles.removeBtnText, { color: colors.error }]}>Remove Stop</Text>
-            </TouchableOpacity>
+            />
           )}
         </View>
       </ScrollView>

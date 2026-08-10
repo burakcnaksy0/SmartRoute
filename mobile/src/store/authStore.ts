@@ -16,7 +16,7 @@ interface AuthState {
   isLoading: boolean;
 
   initialize: () => Promise<void>;
-  setAuth: (accessToken: string, refreshToken: string, user: User) => Promise<void>;
+  setAuth: (accessToken: string, refreshToken: string, user: User, rememberMe?: boolean) => Promise<void>;
   updateTokens: (accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -30,6 +30,22 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   initialize: async () => {
     try {
+      const rememberMe = await SecureStore.getItemAsync('rememberMe');
+      if (rememberMe === 'false') {
+        // Clear session on initialization if rememberMe was false (app restarted)
+        await SecureStore.deleteItemAsync('accessToken');
+        await SecureStore.deleteItemAsync('refreshToken');
+        await SecureStore.deleteItemAsync('user');
+        set({
+          accessToken: null,
+          refreshToken: null,
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+        return;
+      }
+
       const accessToken = await SecureStore.getItemAsync('accessToken');
       const refreshToken = await SecureStore.getItemAsync('refreshToken');
       const userStr = await SecureStore.getItemAsync('user');
@@ -64,11 +80,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  setAuth: async (accessToken, refreshToken, user) => {
+  setAuth: async (accessToken, refreshToken, user, rememberMe = true) => {
     try {
-      await SecureStore.setItemAsync('accessToken', accessToken);
-      await SecureStore.setItemAsync('refreshToken', refreshToken);
-      await SecureStore.setItemAsync('user', JSON.stringify(user));
+      await SecureStore.setItemAsync('rememberMe', String(rememberMe));
+      if (rememberMe) {
+        await SecureStore.setItemAsync('accessToken', accessToken);
+        await SecureStore.setItemAsync('refreshToken', refreshToken);
+        await SecureStore.setItemAsync('user', JSON.stringify(user));
+      } else {
+        await SecureStore.deleteItemAsync('accessToken');
+        await SecureStore.deleteItemAsync('refreshToken');
+        await SecureStore.deleteItemAsync('user');
+      }
 
       set({
         accessToken,
@@ -83,8 +106,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   updateTokens: async (accessToken, refreshToken) => {
     try {
-      await SecureStore.setItemAsync('accessToken', accessToken);
-      await SecureStore.setItemAsync('refreshToken', refreshToken);
+      const rememberMe = await SecureStore.getItemAsync('rememberMe');
+      if (rememberMe !== 'false') {
+        await SecureStore.setItemAsync('accessToken', accessToken);
+        await SecureStore.setItemAsync('refreshToken', refreshToken);
+      }
       set({ accessToken, refreshToken });
     } catch (error) {
       console.error('Failed to update tokens:', error);
@@ -96,6 +122,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       await SecureStore.deleteItemAsync('accessToken');
       await SecureStore.deleteItemAsync('refreshToken');
       await SecureStore.deleteItemAsync('user');
+      await SecureStore.deleteItemAsync('rememberMe');
 
       set({
         accessToken: null,

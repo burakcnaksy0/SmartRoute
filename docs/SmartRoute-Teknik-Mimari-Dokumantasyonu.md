@@ -197,14 +197,14 @@ Navigasyonun kendisini (turn-by-turn sesli yönlendirme, harita render'ı) **yen
               ▼              ▼                   ▼
      ┌────────────────┐ ┌──────────────┐ ┌────────────────┐
      │ Google Routes   │ │ Google Places│ │ LLM API         │
-     │ API             │ │ API          │ │ (Claude/OpenAI) │
+     │ API             │ │ API          │ │ (HuggingFace)  │
      └────────────────┘ └──────────────┘ └────────────────┘
 ```
 
 ### 5.1 Mimari Prensipler
 
 1. **Ayrık sorumluluk:** Mobil uygulama sadece UI + state yönetimi yapar; tüm optimizasyon mantığı backend'de çalışır (hem güvenlik hem de algoritma güncellemelerini anlık deploy edebilmek için).
-2. **Sağlayıcı bağımsızlığı (provider abstraction):** Routing/Places istemcileri bir arayüz (`RoutingProvider`) arkasına gizlenir; ileride Yandex/HERE gibi sağlayıcılar eklenebilir.
+2. **Sağlayıcı bağımsızlığı (provider abstraction):** Routing/Places istemcileri bir arayüz (`RoutingProvider`) arkasına gizlenir; ileride Yandex/HERE gibi sağlayıcılar eklenebilir. Benzer şekilde, AI katmanı `LlmProvider` arayüzü ile soyutlanmış olup, Hugging Face veya diğer OpenAI uyumlu chat completion API sağlayıcılarına kolayca geçişi destekler.
 3. **Cache-first trafik verisi:** Aynı segment için tekrar tekrar Google'a istek atmamak için Redis üzerinde kısa ömürlü (2-5 dk) trafik cache'i.
 4. **Stateless backend, stateful job'lar için queue:** Ağır optimizasyon istekleri (örn. 15+ durak) senkron değil, async job olarak işlenir (bkz. Bölüm 8.4).
 5. **AI çağrıları izole edilir:** LLM çağrıları ayrı bir `NlpParsingService` içinde, backend'in geri kalanından bağımsız, timeout ve fallback mekanizmalı.
@@ -252,7 +252,7 @@ Navigasyonun kendisini (turn-by-turn sesli yönlendirme, harita render'ı) **yen
 | Google Places API | Durak arama, rota üzeri POI, otopark arama |
 | Google Geocoding API | Adres → koordinat dönüşümü |
 | Google Distance Matrix API (veya Routes Matrix) | Çoklu durak arası mesafe/süre matrisi (optimizasyon algoritmasının girdisi) |
-| LLM API (Anthropic Claude API) | Doğal dil → yapılandırılmış yolculuk planı parse etme |
+| LLM API (Hugging Face / OpenAI Uyumlu API) | Doğal dil → yapılandırılmış yolculuk planı parse etme |
 | Firebase Cloud Messaging veya Expo Push | Push bildirimleri |
 | Sentry | Hata izleme (mobil + backend) |
 
@@ -831,7 +831,7 @@ yapılandırılmış bir `JourneyRequest` JSON'ına çevirmek.
 
 ### 13.2 Teknik Yaklaşım — Structured Output
 
-- LLM (Claude API) çağrısı **yalnızca JSON döndürecek** şekilde sistem prompt'u ile kısıtlanır; Anthropic'in tool-use / structured output özelliği kullanılarak şema zorunlu kılınır (serbest metin sızıntısı önlenir).
+- LLM (`LlmProvider` aracılığıyla Hugging Face / OpenAI uyumlu model) çağrısı **yalnızca JSON döndürecek** şekilde sistem prompt'u ile kısıtlanır; JSON şeması sistem ve kullanıcı rolleri üzerinden zorunlu kılınarak serbest metin sızıntısı önlenir.
 - Şema, backend'deki `JourneyRequest` DTO'suyla birebir eşleşir (bkz. 10.6).
 
 **Sistem prompt iskeleti (özet):**
@@ -1627,7 +1627,7 @@ SENTRY_DSN
 
 ### Faz 4 — Smart Departure + NLP Girişi
 - Backend: Departure Time Optimizer servisi.
-- Backend: `JourneyNlpParsingService` (Claude API entegrasyonu, structured output).
+- Backend: `JourneyNlpParsingService` (`LlmProvider` arayüzü ve `HuggingFaceLlmProvider` entegrasyonu, structured output).
 - Mobil: Doğal dil giriş kutusu + parse sonucu onay ekranı.
 - Mobil: Departure suggestion ekranı.
 

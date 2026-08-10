@@ -6,6 +6,7 @@ import journeyApi, {
   NlpParseResult,
   DepartureSuggestion,
   JourneyPlan,
+  JourneyStatistics,
 } from '../api/journey';
 
 interface JourneyState {
@@ -13,6 +14,11 @@ interface JourneyState {
   currentJourney: Journey | null;
   isLoading: boolean;
   error: string | null;
+
+  // History & statistics
+  historyJourneys: Journey[];
+  statistics: JourneyStatistics | null;
+  isHistoryLoading: boolean;
 
   // Draft stops for manual creation/editing
   draftStops: JourneyStopRequest[];
@@ -34,6 +40,8 @@ interface JourneyState {
   createJourney: (request: JourneyRequest) => Promise<Journey | null>;
   optimizeJourney: (id: string, params: any) => Promise<boolean>;
   fetchDepartureSuggestions: (journeyId: string, targetArrivalTime: string) => Promise<boolean>;
+  fetchHistoryJourneys: () => Promise<boolean>;
+  fetchStatistics: () => Promise<boolean>;
   
   // Draft stop actions
   addDraftStop: (stop: JourneyStopRequest) => void;
@@ -67,6 +75,9 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
   currentJourney: null,
   isLoading: false,
   error: null,
+  historyJourneys: [],
+  statistics: null,
+  isHistoryLoading: false,
   draftStops: [],
   infeasibleConflictingStops: null,
 
@@ -146,6 +157,28 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
       const msg =
         e?.response?.data?.error || e?.message || 'Çıkış önerileri yüklenemedi.';
       set({ suggestionsError: msg, isLoadingSuggestions: false });
+      return false;
+    }
+  },
+
+  fetchHistoryJourneys: async () => {
+    set({ isHistoryLoading: true });
+    try {
+      const journeys = await journeyApi.getJourneys();
+      set({ historyJourneys: journeys, isHistoryLoading: false });
+      return true;
+    } catch (e: any) {
+      set({ isHistoryLoading: false });
+      return false;
+    }
+  },
+
+  fetchStatistics: async () => {
+    try {
+      const stats = await journeyApi.getStatistics();
+      set({ statistics: stats });
+      return true;
+    } catch {
       return false;
     }
   },

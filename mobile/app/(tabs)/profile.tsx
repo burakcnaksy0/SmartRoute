@@ -1,319 +1,396 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Switch,
-  StatusBar,
   Platform,
+  Animated,
+  Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors, Spacing, Rounded } from '@/constants/theme';
+import { Colors, Spacing, Rounded, Shadow, Typography, TabBarHeight } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { authApi } from '@/api/auth';
+import { Button } from '@/components/ui/Button';
+import { SectionHeader } from '@/components/ui/Badge';
+
+const C = Colors.light;
 
 export default function ProfileScreen() {
-  const colors = Colors.light;
   const { user, logout } = useAuthStore();
+  const [logoutLoading,      setLogoutLoading]      = useState(false);
 
-  // Settings states
-  const [departureAlerts, setDepartureAlerts] = useState(true);
-  const [serviceDisruptions, setServiceDisruptions] = useState(false);
+  const {
+    mapProvider,
+    distanceUnit,
+    language,
+    departureAlerts,
+    serviceDisruptions,
+    fetchSettings,
+    updateSettings,
+  } = useSettingsStore();
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    fetchSettings();
+  }, []);
 
   const handleLogout = async () => {
+    setLogoutLoading(true);
     try {
       await authApi.logout();
-    } catch (e) {
-      console.warn('Logout failed to call API, logging out locally', e);
-    } finally {
+    } catch {}
+    finally {
       await logout();
+      setLogoutLoading(false);
     }
   };
 
+  const initials = user?.fullName
+    ? user.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : '?';
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle="dark-content" />
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: 'rgba(0,0,0,0.04)' }]}>
-        <View style={styles.headerTitleRow}>
-          <Text style={[styles.headerTitle, { color: colors.onSurface }]}>SmartRoute</Text>
-        </View>
-        <View style={[styles.avatarHeader, { backgroundColor: colors.primary }]}>
-          <Text style={styles.avatarHeaderText}>
-            {user?.fullName ? user.fullName.split(' ').map(n => n[0]).join('').toUpperCase() : 'JD'}
-          </Text>
-        </View>
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar style="dark" />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.mainTitle, { color: colors.onSurface }]}>Settings</Text>
+      <Animated.View style={[{ flex: 1 }, { opacity: fadeAnim }]}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Ayarlar</Text>
+          </View>
 
-        {/* Section: Account */}
-        <Text style={[styles.sectionLabel, { color: colors.outline }]}>Account</Text>
-        <View style={[styles.sectionContainer, { backgroundColor: colors.surface }]}>
-          <TouchableOpacity style={styles.accountRow} activeOpacity={0.7}>
-            <View style={styles.accountLeft}>
-              <View style={[styles.accountAvatar, { backgroundColor: colors.primaryContainer }]}>
-                <MaterialIcons name="person" size={24} color={colors.onPrimaryContainer} />
-              </View>
-              <View>
-                <Text style={[styles.profileName, { color: colors.onSurface }]}>
-                  {user?.fullName || 'Jane Doe'}
-                </Text>
-                <Text style={[styles.profileEmail, { color: colors.outline }]}>
-                  {user?.email || 'jane.doe@example.com'}
-                </Text>
-              </View>
+          {/* Profile Card */}
+          <View style={styles.profileCard}>
+            <View style={styles.avatarLarge}>
+              <Text style={styles.avatarText}>{initials}</Text>
             </View>
-            <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-          </TouchableOpacity>
-        </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{user?.fullName ?? 'Misafir Kullanıcı'}</Text>
+              <Text style={styles.profileEmail}>{user?.email ?? '—'}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.editProfileBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Profili düzenle"
+            >
+              <MaterialIcons name="edit" size={18} color={C.primary} />
+            </TouchableOpacity>
+          </View>
 
-        {/* Section: Preferences */}
-        <Text style={[styles.sectionLabel, { color: colors.outline }]}>Preferences</Text>
-        <View style={[styles.sectionContainer, { backgroundColor: colors.surface }]}>
-          <TouchableOpacity style={styles.preferenceRow} activeOpacity={0.7}>
-            <View style={styles.prefLeft}>
-              <View style={[styles.prefIconContainer, { backgroundColor: colors.surfaceContainer }]}>
-                <MaterialIcons name="map" size={20} color={colors.primary} />
-              </View>
-              <Text style={[styles.prefText, { color: colors.onSurface }]}>Map Provider</Text>
-            </View>
-            <View style={styles.prefRight}>
-              <Text style={[styles.prefValue, { color: colors.outline }]}>Apple Maps</Text>
-              <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
-            </View>
-          </TouchableOpacity>
+          {/* Preferences */}
+          <SectionHeader title="Tercihler" />
+          <View style={styles.settingsGroup}>
+            <SettingsRow
+              icon="map"
+              label="Harita Sağlayıcısı"
+              value={mapProvider}
+              onPress={() => {
+                Alert.alert(
+                  'Harita Sağlayıcısı Seçin',
+                  'Varsayılan harita uygulamasını seçin.',
+                  [
+                    { text: 'OpenStreetMap', onPress: () => updateSettings({ mapProvider: 'OpenStreetMap' }) },
+                    { text: 'Apple Haritalar', onPress: () => updateSettings({ mapProvider: 'Apple Haritalar' }) },
+                    { text: 'İptal', style: 'cancel' }
+                  ]
+                );
+              }}
+            />
+            <View style={styles.rowDivider} />
+            <SettingsRow
+              icon="straighten"
+              label="Mesafe Birimi"
+              value={distanceUnit}
+              onPress={() => {
+                Alert.alert(
+                  'Mesafe Birimi Seçin',
+                  'Kullanılacak mesafe ölçü birimini seçin.',
+                  [
+                    { text: 'Kilometre (km)', onPress: () => updateSettings({ distanceUnit: 'Kilometre' }) },
+                    { text: 'Mil (mi)', onPress: () => updateSettings({ distanceUnit: 'Mil' }) },
+                    { text: 'İptal', style: 'cancel' }
+                  ]
+                );
+              }}
+            />
+            <View style={styles.rowDivider} />
+            <SettingsRow
+              icon="language"
+              label="Dil"
+              value={language}
+              onPress={() => {
+                Alert.alert(
+                  'Dil Seçin / Select Language',
+                  'Uygulama dilini seçin.',
+                  [
+                    { text: 'Türkçe', onPress: () => updateSettings({ language: 'Türkçe' }) },
+                    { text: 'English', onPress: () => updateSettings({ language: 'English' }) },
+                    { text: 'İptal', style: 'cancel' }
+                  ]
+                );
+              }}
+            />
+          </View>
 
-          <View style={[styles.divider, { backgroundColor: colors.surfaceContainer }]} />
-
-          <TouchableOpacity style={styles.preferenceRow} activeOpacity={0.7}>
-            <View style={styles.prefLeft}>
-              <View style={[styles.prefIconContainer, { backgroundColor: colors.surfaceContainer }]}>
-                <MaterialIcons name="straighten" size={20} color={colors.primary} />
-              </View>
-              <Text style={[styles.prefText, { color: colors.onSurface }]}>Units</Text>
-            </View>
-            <View style={styles.prefRight}>
-              <Text style={[styles.prefValue, { color: colors.outline }]}>Miles</Text>
-              <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Section: Notifications */}
-        <Text style={[styles.sectionLabel, { color: colors.outline }]}>Notifications</Text>
-        <View style={[styles.sectionContainer, { backgroundColor: colors.surface }]}>
-          <View style={styles.notificationRow}>
-            <View style={styles.prefLeft}>
-              <View style={[styles.prefIconContainer, { backgroundColor: colors.surfaceContainer }]}>
-                <MaterialIcons name="directions-bus" size={20} color={colors.primary} />
-              </View>
-              <View>
-                <Text style={[styles.prefText, { color: colors.onSurface }]}>Departure Alerts</Text>
-                <Text style={[styles.prefDesc, { color: colors.outline }]}>Notify when it's time to leave</Text>
-              </View>
-            </View>
-            <Switch
+          {/* Notifications */}
+          <SectionHeader title="Bildirimler" />
+          <View style={styles.settingsGroup}>
+            <ToggleRow
+              icon="notifications-active"
+              label="Hareket Alarmları"
+              description="Yola çıkma zamanı geldiğinde bildir"
               value={departureAlerts}
-              onValueChange={setDepartureAlerts}
-              trackColor={{ false: colors.surfaceContainerHigh, true: colors.primary }}
-              thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
+              onChange={(val) => updateSettings({ departureAlerts: val })}
             />
-          </View>
-
-          <View style={[styles.divider, { backgroundColor: colors.surfaceContainer }]} />
-
-          <View style={styles.notificationRow}>
-            <View style={styles.prefLeft}>
-              <View style={[styles.prefIconContainer, { backgroundColor: colors.surfaceContainer }]}>
-                <MaterialIcons name="warning" size={20} color={colors.primary} />
-              </View>
-              <View>
-                <Text style={[styles.prefText, { color: colors.onSurface }]}>Service Disruptions</Text>
-                <Text style={[styles.prefDesc, { color: colors.outline }]}>Alerts for route delays</Text>
-              </View>
-            </View>
-            <Switch
+            <View style={styles.rowDivider} />
+            <ToggleRow
+              icon="warning-amber"
+              label="Hizmet Kesintileri"
+              description="Rota gecikmeleri için uyarılar"
               value={serviceDisruptions}
-              onValueChange={setServiceDisruptions}
-              trackColor={{ false: colors.surfaceContainerHigh, true: colors.primary }}
-              thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
+              onChange={(val) => updateSettings({ serviceDisruptions: val })}
             />
           </View>
-        </View>
 
-        {/* Sign Out Button */}
-        <View style={styles.signOutWrapper}>
-          <TouchableOpacity
-            style={[styles.signOutButton, { backgroundColor: colors.surface }]}
-            onPress={handleLogout}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.signOutText, { color: colors.error }]}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+          {/* About */}
+          <SectionHeader title="Hakkında" />
+          <View style={styles.settingsGroup}>
+            <SettingsRow
+              icon="info"
+              label="Sürüm"
+              value="1.0.0"
+            />
+            <View style={styles.rowDivider} />
+            <SettingsRow
+              icon="privacy-tip"
+              label="Gizlilik Politikası"
+              onPress={() => {}}
+            />
+            <View style={styles.rowDivider} />
+            <SettingsRow
+              icon="description"
+              label="Kullanım Koşulları"
+              onPress={() => {}}
+            />
+          </View>
+
+          {/* Sign Out */}
+          <View style={styles.signOutWrapper}>
+            <Button
+              label="Çıkış Yap"
+              variant="danger"
+              size="lg"
+              fullWidth
+              loading={logoutLoading}
+              onPress={handleLogout}
+            />
+          </View>
+        </ScrollView>
+      </Animated.View>
     </SafeAreaView>
   );
 }
 
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
+function SettingsRow({
+  icon,
+  label,
+  value,
+  onPress,
+}: {
+  icon: keyof typeof MaterialIcons.glyphMap;
+  label: string;
+  value?: string;
+  onPress?: () => void;
+}) {
+  const content = (
+    <View style={rowStyles.row}>
+      <View style={rowStyles.iconBg}>
+        <MaterialIcons name={icon} size={18} color={C.primary} />
+      </View>
+      <Text style={rowStyles.label}>{label}</Text>
+      <View style={rowStyles.right}>
+        {value && <Text style={rowStyles.value}>{value}</Text>}
+        {onPress && <MaterialIcons name="chevron-right" size={20} color={C.outline} />}
+      </View>
+    </View>
+  );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7} accessibilityRole="button">
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return content;
+}
+
+function ToggleRow({
+  icon,
+  label,
+  description,
+  value,
+  onChange,
+}: {
+  icon: keyof typeof MaterialIcons.glyphMap;
+  label: string;
+  description: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <View style={rowStyles.row}>
+      <View style={rowStyles.iconBg}>
+        <MaterialIcons name={icon} size={18} color={C.primary} />
+      </View>
+      <View style={rowStyles.toggleContent}>
+        <Text style={rowStyles.label}>{label}</Text>
+        <Text style={rowStyles.desc}>{description}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ false: C.surfaceContainerHigh, true: C.primary }}
+        thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
+        accessibilityRole="switch"
+      />
+    </View>
+  );
+}
+
+const rowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+    gap: Spacing.md,
+  },
+  iconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: Rounded.default,
+    backgroundColor: C.primaryFixed,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  label: {
+    ...Typography.bodyMedium,
+    color: C.text,
+    flex: 1,
+  },
+  right: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  value: {
+    ...Typography.bodySmall,
+    color: C.textSecondary,
+  },
+  toggleContent: {
+    flex: 1,
+    gap: 2,
+  },
+  desc: {
+    ...Typography.caption,
+    color: C.textSecondary,
+  },
+});
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    backgroundColor: C.background,
+  },
+  scroll: {
+    paddingHorizontal: Spacing.gutter,
+    paddingBottom: TabBarHeight + Spacing['2xl'],
   },
   header: {
-    height: 56,
-    paddingHorizontal: Spacing.marginMain,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.base,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    fontFamily: 'System',
-    letterSpacing: -0.4,
+    ...Typography.h1,
+    color: C.text,
   },
-  avatarHeader: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarHeaderText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.marginMain,
-    paddingTop: Spacing.stackLg,
-    paddingBottom: 100, // Safe padding for bottom tabs
-  },
-  mainTitle: {
-    fontSize: 34,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-    marginBottom: Spacing.stackLg,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    paddingHorizontal: 4,
-    marginBottom: Spacing.stackSm,
-    marginTop: Spacing.stackLg,
-  },
-  sectionContainer: {
+  // Profile card
+  profileCard: {
+    backgroundColor: C.surface,
     borderRadius: Rounded.xl,
-    overflow: 'hidden',
-    shadowColor: 'rgba(0, 0, 0, 0.02)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  accountRow: {
+    padding: Spacing.base,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
+    gap: Spacing.base,
+    ...Shadow.md,
   },
-  accountLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  accountAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  avatarLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: C.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarText: {
+    color: C.onPrimary,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  profileInfo: {
+    flex: 1,
+    gap: 3,
   },
   profileName: {
-    fontSize: 20,
-    fontWeight: '600',
-    letterSpacing: -0.4,
-    marginBottom: 2,
+    ...Typography.h4,
+    color: C.text,
   },
   profileEmail: {
-    fontSize: 15,
+    ...Typography.bodySmall,
+    color: C.textSecondary,
   },
-  preferenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  prefLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    flex: 1,
-  },
-  prefIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: Rounded.default,
+  editProfileBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: C.primaryFixed,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  prefText: {
-    fontSize: 17,
-    fontWeight: '500',
-  },
-  prefDesc: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  prefRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  prefValue: {
-    fontSize: 15,
-  },
-  notificationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  divider: {
-    height: 1,
-    marginLeft: 64,
-  },
-  signOutWrapper: {
-    marginTop: Spacing.stackLg,
-    marginBottom: Spacing.stackLg,
-  },
-  signOutButton: {
+  // Settings group
+  settingsGroup: {
+    backgroundColor: C.surface,
     borderRadius: Rounded.xl,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: 'rgba(0, 0, 0, 0.02)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 1,
+    overflow: 'hidden',
+    ...Shadow.sm,
   },
-  signOutText: {
-    fontSize: 17,
-    fontWeight: '600',
+  rowDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: C.outlineVariant,
+    marginLeft: Spacing.base + 34 + Spacing.md,
+  },
+  // Sign out
+  signOutWrapper: {
+    marginTop: Spacing.xl,
+    marginBottom: Spacing.md,
   },
 });

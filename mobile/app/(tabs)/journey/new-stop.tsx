@@ -18,16 +18,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useJourneyStore } from '@/store/journeyStore';
 import StopList, { StopListItem } from '@/components/StopList';
 import { Colors, Spacing, Rounded } from '@/constants/theme';
-
-const PREDEFINED_PLACES = [
-  { name: 'Kadıköy, İstanbul', lat: 40.9909, lng: 29.0303 },
-  { name: 'Beşiktaş, İstanbul', lat: 41.0428, lng: 29.0075 },
-  { name: 'Üsküdar, İstanbul', lat: 41.0267, lng: 29.0156 },
-  { name: 'Gebze Center, Kocaeli', lat: 40.7989, lng: 29.4123 },
-  { name: 'Sabiha Gökçen Havalimanı', lat: 40.8986, lng: 29.3092 },
-  { name: 'Maltepe Park, İstanbul', lat: 40.9167, lng: 29.1833 },
-  { name: 'Maslak, İstanbul', lat: 41.1111, lng: 29.0194 },
-];
+import { ScreenHeader } from '@/components/ui/Header';
+import { placesApi, PlaceResult } from '@/api/places';
 
 export default function NewStopScreen() {
   const router = useRouter();
@@ -49,15 +41,25 @@ export default function NewStopScreen() {
   const [startLat, setStartLat] = useState(40.9909);
   const [startLng, setStartLng] = useState(29.0303);
 
+  // Geocoding start location via a debounce effect
   useEffect(() => {
-    const matched = PREDEFINED_PLACES.find(
-      p => p.name.toLowerCase() === startAddress.toLowerCase() ||
-           p.name.split(',')[0].toLowerCase() === startAddress.toLowerCase()
-    );
-    if (matched) {
-      setStartLat(matched.lat);
-      setStartLng(matched.lng);
+    if (!startAddress.trim() || startAddress === 'Kadıköy, İstanbul') {
+      return;
     }
+
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const results = await placesApi.search(startAddress);
+        if (results && results.length > 0) {
+          setStartLat(results[0].lat);
+          setStartLng(results[0].lng);
+        }
+      } catch (err) {
+        console.error('Start location geocoding error:', err);
+      }
+    }, 600);
+
+    return () => clearTimeout(delayDebounceFn);
   }, [startAddress]);
 
   const [depTime, setDepTime] = useState('09:00');
@@ -65,15 +67,36 @@ export default function NewStopScreen() {
   const [profileType, setProfileType] = useState<'fast' | 'economic'>('fast');
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [customPlaceName, setCustomPlaceName] = useState('');
 
-  // Filtering searches
-  const filteredPlaces = PREDEFINED_PLACES.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Debounced search for stops
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
 
-  const handleSelectPlace = (place: typeof PREDEFINED_PLACES[0]) => {
+    const delayDebounceFn = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await placesApi.search(searchQuery);
+        setSearchResults(results);
+        setShowSearchResults(true);
+      } catch (err) {
+        console.error('Search error:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 450);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
+  const handleSelectPlace = (place: PlaceResult) => {
     setShowSearchResults(false);
     setSearchQuery('');
     router.push({
@@ -104,7 +127,7 @@ export default function NewStopScreen() {
 
   const handleBuildJourney = async () => {
     if (draftStops.length === 0) {
-      Alert.alert('Error', 'Please add at least one stop to build your journey.');
+      Alert.alert('Hata', 'Lütfen rotanızı oluşturmak için en az bir durak ekleyin.');
       return;
     }
 
@@ -142,23 +165,17 @@ export default function NewStopScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="dark-content" />
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: 'rgba(0,0,0,0.04)' }]}>
-        <TouchableOpacity 
-          style={styles.headerBtn} 
-          onPress={() => router.back()}
-          accessibilityLabel="Back"
-        >
-          <MaterialIcons name="chevron-left" size={28} color={colors.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Manual Builder</Text>
-        <TouchableOpacity 
-          style={[styles.headerBtn, { alignItems: 'flex-end' }]} 
-          onPress={() => clearDraftStops()}
-        >
-          <Text style={[styles.clearBtnText, { color: colors.error }]}>Reset</Text>
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Manuel Planlayıcı"
+        rightComponent={
+          <TouchableOpacity
+            onPress={() => clearDraftStops()}
+            style={{ paddingHorizontal: 4 }}
+          >
+            <Text style={{ color: colors.error, fontSize: 14, fontWeight: '600' }}>Sıfırla</Text>
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView 
         contentContainerStyle={styles.scroll} 
@@ -167,7 +184,7 @@ export default function NewStopScreen() {
       >
         {/* Card 1: Start Location Configuration */}
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Start Location</Text>
+          <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Başlangıç Konumu</Text>
           
           <View style={[styles.inputContainer, { backgroundColor: colors.surfaceLow }]}>
             <MaterialIcons name="my-location" size={18} color={colors.primary} style={styles.inputIcon} />
@@ -175,14 +192,14 @@ export default function NewStopScreen() {
               style={[styles.input, { color: colors.onSurface }]}
               value={startAddress}
               onChangeText={setStartAddress}
-              placeholder="Enter start address"
+              placeholder="Başlangıç adresini girin"
               placeholderTextColor={colors.outline}
             />
           </View>
 
           <View style={styles.formRow}>
             <View style={styles.formCol}>
-              <Text style={[styles.inputLabel, { color: colors.outline }]}>Departure Time</Text>
+              <Text style={[styles.inputLabel, { color: colors.outline }]}>Çıkış Saati</Text>
               <View style={[styles.inputContainer, { backgroundColor: colors.surfaceLow }]}>
                 <MaterialIcons name="schedule" size={18} color={colors.outline} style={styles.inputIcon} />
                 <TextInput
@@ -196,14 +213,14 @@ export default function NewStopScreen() {
             </View>
 
             <View style={styles.formCol}>
-              <Text style={[styles.inputLabel, { color: colors.outline }]}>Route Mode</Text>
+              <Text style={[styles.inputLabel, { color: colors.outline }]}>Rota Modu</Text>
               <View style={[styles.profileSelector, { backgroundColor: colors.surfaceLow }]}>
                 <TouchableOpacity
                   style={[styles.profileBtn, profileType === 'fast' && [styles.profileBtnActive, { backgroundColor: colors.surface }]]}
                   onPress={() => setProfileType('fast')}
                 >
                   <Text style={[styles.profileBtnText, { color: colors.outline }, profileType === 'fast' && { color: colors.primary, fontWeight: '600' }]}>
-                    Fast
+                    Hızlı
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -211,7 +228,7 @@ export default function NewStopScreen() {
                   onPress={() => setProfileType('economic')}
                 >
                   <Text style={[styles.profileBtnText, { color: colors.outline }, profileType === 'economic' && { color: colors.primary, fontWeight: '600' }]}>
-                    Eco
+                    Eko
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -219,7 +236,7 @@ export default function NewStopScreen() {
           </View>
 
           <View style={[styles.switchRow, { borderTopColor: colors.surfaceContainer }]}>
-            <Text style={[styles.switchLabel, { color: colors.onSurface }]}>Return to starting point</Text>
+            <Text style={[styles.switchLabel, { color: colors.onSurface }]}>Başlangıç noktasına geri dön</Text>
             <Switch
               value={returnToStart}
               onValueChange={setReturnToStart}
@@ -231,7 +248,7 @@ export default function NewStopScreen() {
 
         {/* Card 2: Stop Search Prediction */}
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Search & Add Stops</Text>
+          <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Durak Ara & Ekle</Text>
           
           <View style={[styles.searchBar, { backgroundColor: colors.surfaceLow }]}>
             <MaterialIcons name="search" size={20} color={colors.outline} style={styles.inputIcon} />
@@ -242,7 +259,7 @@ export default function NewStopScreen() {
                 setSearchQuery(text);
                 setShowSearchResults(text.length > 0);
               }}
-              placeholder="Find a location..."
+              placeholder="Konum ara..."
               placeholderTextColor={colors.outline}
             />
             {searchQuery.length > 0 && (
@@ -254,22 +271,37 @@ export default function NewStopScreen() {
 
           {showSearchResults && (
             <View style={[styles.resultsList, { backgroundColor: colors.surfaceLow, borderColor: colors.surfaceContainer }]}>
-              {filteredPlaces.map((place, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={[styles.resultItem, { borderBottomColor: colors.surfaceContainer }]}
-                  onPress={() => handleSelectPlace(place)}
-                >
-                  <MaterialIcons name="place" size={18} color={colors.primary} />
-                  <Text style={[styles.resultText, { color: colors.onSurface }]} numberOfLines={1}>
-                    {place.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-              {filteredPlaces.length === 0 && (
-                <View style={styles.noResult}>
-                  <Text style={[styles.noResultText, { color: colors.outline }]}>No matching locations found.</Text>
+              {isSearching ? (
+                <View style={{ padding: 16, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color={colors.primary} />
                 </View>
+              ) : (
+                <>
+                  {searchResults.map((place, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.resultItem, { borderBottomColor: colors.surfaceContainer }]}
+                      onPress={() => handleSelectPlace(place)}
+                    >
+                      <MaterialIcons name="place" size={18} color={colors.primary} />
+                      <View style={{ marginLeft: 8, flex: 1 }}>
+                        <Text style={{ color: colors.onSurface, fontSize: 14, fontWeight: '500' }} numberOfLines={1}>
+                          {place.name}
+                        </Text>
+                        {place.vicinity ? (
+                          <Text style={{ color: colors.outline, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                            {place.vicinity}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  {searchResults.length === 0 && (
+                    <View style={styles.noResult}>
+                      <Text style={[styles.noResultText, { color: colors.outline }]}>Eşleşen konum bulunamadı.</Text>
+                    </View>
+                  )}
+                </>
               )}
             </View>
           )}
@@ -282,7 +314,7 @@ export default function NewStopScreen() {
                 style={[styles.input, { color: colors.onSurface }]}
                 value={customPlaceName}
                 onChangeText={setCustomPlaceName}
-                placeholder="Or type custom place name..."
+                placeholder="Veya özel konum adı yazın..."
                 placeholderTextColor={colors.outline}
               />
             </View>
@@ -290,7 +322,7 @@ export default function NewStopScreen() {
               style={[styles.customAddButton, { backgroundColor: colors.primary }]} 
               onPress={handleAddCustomPlace}
             >
-              <Text style={[styles.customAddButtonText, { color: colors.onPrimary }]}>Add</Text>
+              <Text style={[styles.customAddButtonText, { color: colors.onPrimary }]}>Ekle</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -305,7 +337,7 @@ export default function NewStopScreen() {
 
         {/* Stops Itinerary Title */}
         <Text style={[styles.sectionTitleLabel, { color: colors.outline }]}>
-          Draft Stops ({draftStops.length})
+          Taslak Duraklar ({draftStops.length})
         </Text>
 
         {/* Reorderable Draft StopList */}
@@ -340,7 +372,7 @@ export default function NewStopScreen() {
           <View style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: 0.8 }]}>
             <ActivityIndicator color={colors.onPrimary} size="small" />
             <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]}>
-              Calculating Route...
+              Rota Hesaplanıyor...
             </Text>
           </View>
         ) : (
@@ -360,7 +392,7 @@ export default function NewStopScreen() {
               { color: colors.onPrimary },
               draftStops.length === 0 && { color: colors.outline }
             ]}>
-              Optimize & Build Itinerary
+              Optimize Et & Rotayı Çiz
             </Text>
           </TouchableOpacity>
         )}

@@ -7,10 +7,7 @@ import com.smartroute.repository.UserRepository;
 import com.smartroute.service.places.PlacesService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
@@ -37,5 +34,15 @@ public class PlacesController {
     public ResponseEntity<List<ParkingOptionResponse>> getParkingOptions(@PathVariable UUID id) {
         User user = getCurrentUser();
         return ResponseEntity.ok(placesService.getParkingOptions(id, user));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<List<com.smartroute.service.places.GooglePlaceResult>> searchPlaces(@RequestParam String query) {
+        return ResponseEntity.ok(placesService.searchPlaces(query));
+    }
+
+    @GetMapping("/reverse-geocode")
+    public ResponseEntity<String> reverseGeocode(@RequestParam double lat, @RequestParam double lng) {
+        return ResponseEntity.ok(placesService.reverseGeocode(lat, lng));
     }
 }

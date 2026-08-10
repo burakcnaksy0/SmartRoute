@@ -16,12 +16,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useJourneyStore } from '@/store/journeyStore';
 import { NlpParsedStop } from '@/api/journey';
 import { Colors, Spacing, Rounded } from '@/constants/theme';
+import { ScreenHeader } from '@/components/ui/Header';
+import { Button } from '@/components/ui/Button';
 
 function formatDateTime(isoStr?: string): string {
   if (!isoStr) return '—';
   try {
     const d = new Date(isoStr);
-    return d.toLocaleString('en-US', {
+    return d.toLocaleString('tr-TR', {
       day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
     });
   } catch {
@@ -35,10 +37,10 @@ function StopCard({ stop, index }: { stop: NlpParsedStop; index: number }) {
 
   // Render priorities configuration
   const priorityConfig: Record<string, { color: string; bg: string; label: string }> = {
-    critical: { color: colors.error, bg: colors.errorContainer, label: 'Critical' },
-    high:     { color: colors.tertiary, bg: colors.tertiaryContainer + '18', label: 'High' },
-    normal:   { color: colors.secondary, bg: colors.secondaryContainer + '18', label: 'Medium' },
-    low:      { color: colors.outline, bg: colors.surfaceLow, label: 'Low' },
+    critical: { color: colors.error, bg: colors.errorContainer, label: 'Kritik' },
+    high:     { color: colors.tertiary, bg: colors.tertiaryContainer + '18', label: 'Yüksek' },
+    normal:   { color: colors.secondary, bg: colors.secondaryContainer + '18', label: 'Orta' },
+    low:      { color: colors.outline, bg: colors.surfaceLow, label: 'Düşük' },
   };
 
   const p = stop.priority?.toLowerCase() ?? 'normal';
@@ -51,7 +53,7 @@ function StopCard({ stop, index }: { stop: NlpParsedStop; index: number }) {
           <Text style={styles.stopIndexText}>{index + 1}</Text>
         </View>
         <Text style={[styles.stopName, { color: colors.onSurface }]} numberOfLines={2}>
-          {stop.placeName || 'Unnamed Stop'}
+          {stop.placeName || 'İsimsiz Durak'}
         </Text>
       </View>
 
@@ -60,7 +62,7 @@ function StopCard({ stop, index }: { stop: NlpParsedStop; index: number }) {
           <View style={[styles.geocodingWarning, { backgroundColor: colors.errorContainer + '15' }]}>
             <MaterialIcons name="warning" size={16} color={colors.error} />
             <Text style={[styles.geocodingWarningText, { color: colors.error }]}>
-              Missing coordinates — please edit manually to fix.
+              Koordinat eksik — düzeltmek için lütfen manuel düzenleyin.
             </Text>
           </View>
         ) : (
@@ -76,7 +78,7 @@ function StopCard({ stop, index }: { stop: NlpParsedStop; index: number }) {
           {stop.visitDurationMinutes != null && (
             <View style={[styles.metaChip, { backgroundColor: colors.surfaceLow }]}>
               <MaterialIcons name="schedule" size={12} color={colors.outline} />
-              <Text style={[styles.metaChipText, { color: colors.outline }]}>{stop.visitDurationMinutes} min</Text>
+              <Text style={[styles.metaChipText, { color: colors.outline }]}>{stop.visitDurationMinutes} dk</Text>
             </View>
           )}
           <View style={[styles.metaChip, { backgroundColor: cfg.bg }]}>
@@ -93,7 +95,7 @@ function StopCard({ stop, index }: { stop: NlpParsedStop; index: number }) {
           <View style={styles.timeWindowRow}>
             <MaterialIcons name="hourglass-empty" size={14} color={colors.primary} />
             <Text style={[styles.timeWindowValue, { color: colors.primary }]}>
-              Target: {formatDateTime(stop.timeWindowStart)} – {formatDateTime(stop.timeWindowEnd)}
+              Hedef: {formatDateTime(stop.timeWindowStart)} – {formatDateTime(stop.timeWindowEnd)}
             </Text>
           </View>
         )}
@@ -123,12 +125,12 @@ export default function NlpConfirmScreen() {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }, styles.centered]}>
         <MaterialIcons name="search" size={44} color={colors.outline} />
-        <Text style={[styles.emptyText, { color: colors.outline }]}>No parsed draft route found.</Text>
+        <Text style={[styles.emptyText, { color: colors.outline }]}>Çözümlenmiş taslak rota bulunamadı.</Text>
         <TouchableOpacity
           style={[styles.backBtn, { backgroundColor: colors.primary }]}
           onPress={() => router.replace('/(tabs)/journey/nlp-input' as any)}
         >
-          <Text style={[styles.backBtnText, { color: colors.onPrimary }]}>Go Back</Text>
+          <Text style={[styles.backBtnText, { color: colors.onPrimary }]}>Geri Dön</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -146,11 +148,11 @@ export default function NlpConfirmScreen() {
   const handleConfirm = async () => {
     if (!canConfirm) {
       Alert.alert(
-        'Missing Details',
-        'Starting location coordinates and at least one stop coordinates are required. Please switch to manual input.',
+        'Eksik Detaylar',
+        'Başlangıç konumu koordinatları ve en az bir durak koordinatı gereklidir. Lütfen manuel girişe geçin.',
         [
-          { text: 'Manual Builder', onPress: () => router.replace('/(tabs)/journey/new-stop' as any) },
-          { text: 'Cancel', style: 'cancel' },
+          { text: 'Manuel Planlayıcı', onPress: () => router.replace('/(tabs)/journey/new-stop' as any) },
+          { text: 'İptal', style: 'cancel' },
         ]
       );
       return;
@@ -163,7 +165,7 @@ export default function NlpConfirmScreen() {
       plannedDepartureTime: nlpParsedResult.plannedDepartureTime,
       deadlineTime: nlpParsedResult.deadlineTime,
       stops: stopsWithCoords.map((s) => ({
-        placeName: s.placeName ?? 'Stop',
+        placeName: s.placeName ?? 'Durak',
         lat: s.lat!,
         lng: s.lng!,
         visitDurationMinutes: s.visitDurationMinutes ?? 15,
@@ -182,11 +184,11 @@ export default function NlpConfirmScreen() {
 
   const handleReject = () => {
     Alert.alert(
-      'Discard Plan',
-      'Are you sure you want to discard this generated assistant draft?',
+      'Planı Sil',
+      'Bu yapay zeka taslağını silmek istediğinizden emin misiniz?',
       [
-        { text: 'Discard', style: 'destructive', onPress: () => { clearNlpResult(); router.back(); } },
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sil', style: 'destructive', onPress: () => { clearNlpResult(); router.back(); } },
+        { text: 'Vazgeç', style: 'cancel' },
       ]
     );
   };
@@ -194,18 +196,7 @@ export default function NlpConfirmScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="dark-content" />
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: 'rgba(0,0,0,0.04)' }]}>
-        <TouchableOpacity 
-          style={styles.headerBtn} 
-          onPress={() => router.back()}
-          accessibilityLabel="Back"
-        >
-          <MaterialIcons name="chevron-left" size={28} color={colors.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Confirm Draft</Text>
-        <View style={styles.headerBtn} />
-      </View>
+      <ScreenHeader title="Taslağı Onayla" />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
@@ -215,23 +206,23 @@ export default function NlpConfirmScreen() {
             <View style={[styles.checkCircle, { backgroundColor: colors.secondaryContainer }]}>
               <MaterialIcons name="done" size={32} color={colors.onSecondaryContainer} />
             </View>
-            <Text style={[styles.title, { color: colors.onSurface }]}>Parsed Successfully!</Text>
+            <Text style={[styles.title, { color: colors.onSurface }]}>Başarıyla Çözümlendi!</Text>
             <Text style={[styles.subtitle, { color: colors.outline }]}>
-              Review the stops and itinerary details extracted by the AI assistant.
+              Yapay zeka asistanı tarafından çıkarılan durakları ve ayrıntıları inceleyin.
             </Text>
           </View>
 
           {/* Start parameters card */}
           <View style={[styles.metaCard, { backgroundColor: colors.surface }]}>
             <View style={styles.metaRow}>
-              <Text style={[styles.metaLabel, { color: colors.outline }]}>Start Location</Text>
+              <Text style={[styles.metaLabel, { color: colors.outline }]}>Başlangıç Konumu</Text>
               <Text style={[styles.metaValue, { color: colors.onSurface }]} numberOfLines={2}>
                 {nlpParsedResult.startAddressText ?? '—'}
               </Text>
             </View>
             {nlpParsedResult.plannedDepartureTime && (
               <View style={styles.metaRow}>
-                <Text style={[styles.metaLabel, { color: colors.outline }]}>Departure</Text>
+                <Text style={[styles.metaLabel, { color: colors.outline }]}>Yola Çıkış</Text>
                 <Text style={[styles.metaValue, { color: colors.onSurface }]}>
                   {formatDateTime(nlpParsedResult.plannedDepartureTime)}
                 </Text>
@@ -239,7 +230,7 @@ export default function NlpConfirmScreen() {
             )}
             {nlpParsedResult.deadlineTime && (
               <View style={styles.metaRow}>
-                <Text style={[styles.metaLabel, { color: colors.outline }]}>Deadline</Text>
+                <Text style={[styles.metaLabel, { color: colors.outline }]}>Bitiş Zamanı</Text>
                 <Text style={[styles.metaValue, { color: colors.onSurface }]}>
                   {formatDateTime(nlpParsedResult.deadlineTime)}
                 </Text>
@@ -252,7 +243,7 @@ export default function NlpConfirmScreen() {
             <View style={[styles.warnBanner, { backgroundColor: colors.tertiaryContainer + '10', borderColor: colors.tertiary }]}>
               <MaterialIcons name="warning" size={18} color={colors.tertiary} />
               <Text style={[styles.warnText, { color: colors.tertiary }]}>
-                Some stops need geocoding coordinates. Please edit manually.
+                Bazı durakların koordinatları eksik. Lütfen manuel düzenleyin.
               </Text>
             </View>
           )}
@@ -266,7 +257,7 @@ export default function NlpConfirmScreen() {
           )}
 
           {/* Stops List */}
-          <Text style={[styles.sectionTitle, { color: colors.outline }]}>Parsed Itinerary ({nlpParsedResult.stops?.length ?? 0})</Text>
+          <Text style={[styles.sectionTitle, { color: colors.outline }]}>Çözümlenen Duraklar ({nlpParsedResult.stops?.length ?? 0})</Text>
           {nlpParsedResult.stops?.map((stop, i) => (
             <StopCard key={i} stop={stop} index={i} />
           ))}
@@ -276,7 +267,7 @@ export default function NlpConfirmScreen() {
             {isLoading ? (
               <View style={[styles.confirmBtn, { backgroundColor: colors.secondary }]}>
                 <ActivityIndicator color={colors.onSecondary} size="small" />
-                <Text style={[styles.confirmBtnText, { color: colors.onSecondary }]}>  Optimizing Route...</Text>
+                <Text style={[styles.confirmBtnText, { color: colors.onSecondary }]}>  Rota Optimize Ediliyor...</Text>
               </View>
             ) : (
               <TouchableOpacity
@@ -287,7 +278,7 @@ export default function NlpConfirmScreen() {
               >
                 <MaterialIcons name="done" size={20} color={colors.onSecondary} />
                 <Text style={[styles.confirmBtnText, { color: colors.onSecondary }]}>
-                  Confirm & Run Optimizer
+                  Onayla ve Rotaları Bul
                 </Text>
               </TouchableOpacity>
             )}
@@ -298,7 +289,7 @@ export default function NlpConfirmScreen() {
               disabled={isLoading}
             >
               <MaterialIcons name="delete" size={18} color={colors.error} />
-              <Text style={[styles.rejectBtnText, { color: colors.error }]}>Discard Itinerary</Text>
+              <Text style={[styles.rejectBtnText, { color: colors.error }]}>Planı Sil</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -306,7 +297,7 @@ export default function NlpConfirmScreen() {
               onPress={() => router.replace('/(tabs)/journey/new-stop' as any)}
               disabled={isLoading}
             >
-              <Text style={[styles.manualLinkText, { color: colors.primary }]}>Switch to Manual Editor →</Text>
+              <Text style={[styles.manualLinkText, { color: colors.primary }]}>Manuel Planlayıcıya Geç →</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>

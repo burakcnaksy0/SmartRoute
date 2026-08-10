@@ -11,8 +11,6 @@ import com.smartroute.exception.RateLimitExceededException;
 import com.smartroute.repository.UserNlpUsageRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
@@ -31,22 +29,18 @@ public class JourneyNlpParsingService {
     private final UserNlpUsageRepository userNlpUsageRepository;
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
+    private final LlmProvider llmProvider;
+    private final com.smartroute.service.places.OsmPlacesProvider osmPlacesProvider;
 
-    @Value("${anthropic.api.key}")
-    private String anthropicApiKey;
-
-    @Value("${anthropic.api.baseUrl}")
-    private String anthropicBaseUrl;
-
-    @Value("${google.api.key}")
-    private String googleApiKey;
-
-    @Value("${google.api.mapsBaseUrl}")
-    private String googleMapsBaseUrl;
-
-    public JourneyNlpParsingService(UserNlpUsageRepository userNlpUsageRepository, ObjectMapper objectMapper) {
+    public JourneyNlpParsingService(
+            UserNlpUsageRepository userNlpUsageRepository,
+            ObjectMapper objectMapper,
+            LlmProvider llmProvider,
+            com.smartroute.service.places.OsmPlacesProvider osmPlacesProvider) {
         this.userNlpUsageRepository = userNlpUsageRepository;
         this.objectMapper = objectMapper;
+        this.llmProvider = llmProvider;
+        this.osmPlacesProvider = osmPlacesProvider;
         this.restClient = RestClient.builder()
                 .requestFactory(new org.springframework.http.client.SimpleClientHttpRequestFactory())
                 .build();
@@ -57,8 +51,8 @@ public class JourneyNlpParsingService {
         // 1. Enforce Rate Limiting
         checkAndIncrementRateLimit(user);
 
-        // 2. Call Anthropic Claude API to parse natural language to structured JSON
-        String rawJson = callClaudeNlpParser(text);
+        // 2. Call LLM API to parse natural language to structured JSON
+        String rawJson = callLlmNlpParser(text);
 
         // 3. Map LLM JSON output to DTO
         JourneyRequest parsedRequest = parseLlmJson(rawJson);
@@ -82,8 +76,7 @@ public class JourneyNlpParsingService {
         userNlpUsageRepository.save(usage);
     }
 
-    private String callClaudeNlpParser(String text) {
-        String url = anthropicBaseUrl + "/v1/messages";
+    private String callLlmNlpParser(String text) {
         String currentDateStr = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 
         String systemPrompt = "Sen bir yolculuk planlama asistanısın. Kullanıcının serbest metnini, aşağıdaki JSON şemasına uyan yapılandırılmış bir yolculuk planına çevir.\n" +
@@ -109,33 +102,11 @@ public class JourneyNlpParsingService {
                 "  ]\n" +
                 "}";
 
-        Map<String, Object> requestBody = Map.of(
-                "model", "claude-3-5-sonnet-20240620",
-                "max_tokens", 1500,
-                "system", systemPrompt,
-                "messages", List.of(Map.of("role", "user", "content", text))
-        );
-
         try {
-            JsonNode response = restClient.post()
-                    .uri(url)
-                    .header("x-api-key", anthropicApiKey)
-                    .header("anthropic-version", "2023-06-01")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestBody)
-                    .retrieve()
-                    .body(JsonNode.class);
-
-            if (response != null && response.has("content")) {
-                JsonNode contentArray = response.get("content");
-                if (contentArray.isArray() && contentArray.size() > 0) {
-                    String rawText = contentArray.get(0).get("text").asText();
-                    return extractJson(rawText);
-                }
-            }
-            throw new RuntimeException("Claude API'den geçerli içerik alınamadı.");
+            String rawText = llmProvider.generate(systemPrompt, text);
+            return extractJson(rawText);
         } catch (Exception e) {
-            log.error("Claude API çağrısı sırasında hata oluştu: ", e);
+            log.error("LLM API çağrısı sırasında hata oluştu: ", e);
             throw new RuntimeException("Doğal dil işleme servisine şu an erişilemiyor. Lütfen manuel ekleme yapın.", e);
         }
     }
@@ -217,7 +188,7 @@ public class JourneyNlpParsingService {
             request.setStops(stops);
             return request;
         } catch (JsonProcessingException e) {
-            log.error("Claude JSON çıktısı parse edilemedi: " + json, e);
+            log.error("LLM JSON çıktısı parse edilemedi: " + json, e);
             throw new RuntimeException("Doğal dil çıktısı işlenemedi. Lütfen manuel form ile devam edin.", e);
         } catch (Exception e) {
             log.error("LLM parser mapping hatası: ", e);
@@ -250,24 +221,9 @@ public class JourneyNlpParsingService {
     }
 
     private Map<String, Double> callGeocodingApi(String address) {
-        String url = googleMapsBaseUrl + "/maps/api/geocode/json?address={address}&key={key}";
-        try {
-            JsonNode response = restClient.get()
-                    .uri(url, address, googleApiKey)
-                    .retrieve()
-                    .body(JsonNode.class);
-
-            if (response != null && "OK".equals(response.get("status").asText())) {
-                JsonNode results = response.get("results");
-                if (results.isArray() && results.size() > 0) {
-                    JsonNode location = results.get(0).get("geometry").get("location");
-                    double lat = location.get("lat").asDouble();
-                    double lng = location.get("lng").asDouble();
-                    return Map.of("lat", lat, "lng", lng);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Geocoding hatası (" + address + "): ", e);
+        double[] coords = osmPlacesProvider.geocode(address);
+        if (coords != null) {
+            return Map.of("lat", coords[0], "lng", coords[1]);
         }
         return null; // Return null if not geocoded (will remain null for user resolution)
     }

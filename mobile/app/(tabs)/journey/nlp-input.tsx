@@ -6,59 +6,44 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  ActivityIndicator,
-  Alert,
   Animated,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
-  StatusBar,
+  Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useJourneyStore } from '@/store/journeyStore';
-import { Colors, Spacing, Rounded } from '@/constants/theme';
+import { Colors, Spacing, Rounded, Shadow, Typography } from '@/constants/theme';
+import { ScreenHeader } from '@/components/ui/Header';
+import { Button } from '@/components/ui/Button';
+import { ErrorBanner } from '@/components/ui/States';
+
+const C = Colors.light;
 
 const EXAMPLE_PROMPTS = [
-  "Leave home at 9 AM, drop by the bank at 10 AM, meeting in Maslak at noon, stop by grocery store at 2 PM.",
-  "Start from Beşiktaş this afternoon, go to Gebze Center, need to arrive by 6 PM.",
-  "Stop by pharmacy to pick up medicine on my way to work, get dry cleaning on my way back."
+  "Sabah 9'da evden çık, 10'da bankaya uğra, öğlen Maslak'ta toplantı yap, öğleden sonra 2'de markete git.",
+  "Bu öğleden sonra Beşiktaş'tan başla, Gebze Center'a git, saat 18:00'e kadar varmam gerek.",
+  "İşe giderken eczaneye uğrayıp ilacımı al, dönüşte kuru temizlemeye uğra.",
 ];
 
 export default function NlpInputScreen() {
   const router = useRouter();
-  const colors = Colors.light;
   const { parseNlp, isNlpParsing, nlpError, clearError } = useJourneyStore();
 
   const [text, setText] = useState('');
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, []);
-
-  useEffect(() => {
-    if (isNlpParsing) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(shimmerAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-          Animated.timing(shimmerAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
-        ])
-      ).start();
-    } else {
-      shimmerAnim.stopAnimation();
-      shimmerAnim.setValue(0);
-    }
-  }, [isNlpParsing]);
 
   const handleParse = async () => {
     if (!text.trim()) {
-      Alert.alert('Empty Input', 'Please describe your journey route.');
+      Alert.alert('Giriş Boş', 'Lütfen seyahat rotanızı açıklayın.');
       return;
     }
     clearError();
@@ -68,38 +53,16 @@ export default function NlpInputScreen() {
     }
   };
 
-  const handleExamplePress = (example: string) => {
-    setText(example);
-  };
-
-  const handleManualEntry = () => {
-    router.push('/(tabs)/journey/new-stop' as any);
-  };
-
-  const shimmerOpacity = shimmerAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.4, 1],
-  });
+  const handleExamplePress = (example: string) => setText(example);
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle="dark-content" />
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: 'rgba(0,0,0,0.04)' }]}>
-        <TouchableOpacity 
-          style={styles.headerBtn} 
-          onPress={() => router.back()}
-          accessibilityLabel="Back"
-        >
-          <MaterialIcons name="chevron-left" size={28} color={colors.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.onSurface }]}>AI Assistant</Text>
-        <View style={styles.headerBtn} />
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <StatusBar style="dark" />
+      <ScreenHeader title="Yapay Zeka Asistanı" />
 
       <KeyboardAvoidingView
         style={styles.root}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -107,24 +70,29 @@ export default function NlpInputScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-            
-            {/* Title / Description */}
-            <View style={styles.assistantIntro}>
-              <View style={[styles.sparkIconContainer, { backgroundColor: colors.primaryFixed }]}>
-                <MaterialIcons name="auto-awesome" size={28} color={colors.primary} />
+
+            {/* Intro */}
+            <View style={styles.intro}>
+              <View style={styles.introIcon}>
+                <MaterialIcons name="auto-awesome" size={32} color={C.primary} />
               </View>
-              <Text style={[styles.introTitle, { color: colors.onSurface }]}>Describe Your Day</Text>
-              <Text style={[styles.introSub, { color: colors.outline }]}>
-                Tell the assistant where you need to go and when. It will automatically detect coordinates, durations, and time constraints.
+              <Text style={styles.introTitle}>Gününüzü Anlatın</Text>
+              <Text style={styles.introSub}>
+                Yapay zekaya nereye ve ne zaman gitmek istediğinizi anlatın. Konumları, süreleri ve zaman kısıtlamalarını otomatik olarak analiz eder.
               </Text>
             </View>
 
-            {/* Prompt input card */}
-            <View style={[styles.inputCard, { backgroundColor: colors.surface }]}>
+            {/* Input */}
+            <View
+              style={[
+                styles.inputCard,
+                isFocused && styles.inputCardFocused,
+              ]}
+            >
               <TextInput
-                style={[styles.textInput, { color: colors.onSurface }]}
-                placeholder="e.g., meeting in Kadıköy at 10 AM, pharmacy visit for 15 minutes, grocery store by 3 PM..."
-                placeholderTextColor={colors.outline}
+                style={styles.textInput}
+                placeholder="Örn: Sabah 10'da Kadıköy'de toplantı, 15 dakika eczane ziyareti, öğleden sonra 3'te market..."
+                placeholderTextColor={C.outline}
                 multiline
                 numberOfLines={5}
                 textAlignVertical="top"
@@ -132,70 +100,61 @@ export default function NlpInputScreen() {
                 onChangeText={setText}
                 maxLength={500}
                 editable={!isNlpParsing}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
               />
-              <Text style={[styles.charCount, { color: colors.outline }]}>{text.length}/500</Text>
+              <Text style={styles.charCount}>{text.length} / 500</Text>
             </View>
 
-            {/* Parsing error notification */}
-            {nlpError && (
-              <View style={[styles.errorBox, { backgroundColor: colors.errorContainer + '15', borderColor: colors.error }]}>
-                <MaterialIcons name="warning" size={18} color={colors.error} />
-                <Text style={[styles.errorText, { color: colors.error }]}>{nlpError}</Text>
-              </View>
-            )}
+            {/* Error */}
+            {nlpError && <ErrorBanner message={nlpError} />}
 
-            {/* Action parsing buttons */}
-            {isNlpParsing ? (
-              <Animated.View style={[styles.ctaBtn, { backgroundColor: colors.primary, opacity: shimmerOpacity }]}>
-                <ActivityIndicator color={colors.onPrimary} size="small" />
-                <Text style={[styles.ctaBtnText, { color: colors.onPrimary }]}>  Analyzing Prompt...</Text>
-              </Animated.View>
-            ) : (
-              <TouchableOpacity
-                style={[styles.ctaBtn, { backgroundColor: colors.primary }, !text.trim() && { backgroundColor: colors.surfaceContainerHigh }]}
-                onPress={handleParse}
-                disabled={!text.trim()}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.ctaBtnText, { color: colors.onPrimary }, !text.trim() && { color: colors.outline }]}>
-                  Generate Itinerary Draft
-                </Text>
-              </TouchableOpacity>
-            )}
+            {/* CTA */}
+            <Button
+              label={isNlpParsing ? 'Analiz ediliyor...' : 'Planı Çözümle'}
+              icon={isNlpParsing ? undefined : 'auto-awesome'}
+              onPress={handleParse}
+              loading={isNlpParsing}
+              disabled={!text.trim() || isNlpParsing}
+              fullWidth
+              size="lg"
+            />
 
-            {/* Prompt Examples Divider */}
+            {/* Examples divider */}
             <View style={styles.divider}>
-              <View style={[styles.dividerLine, { backgroundColor: colors.surfaceContainer }]} />
-              <Text style={[styles.dividerText, { color: colors.outline }]}>Or try these examples</Text>
-              <View style={[styles.dividerLine, { backgroundColor: colors.surfaceContainer }]} />
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Örnek şablonları deneyin</Text>
+              <View style={styles.dividerLine} />
             </View>
 
-            {/* Prompt Chips */}
-            <View style={styles.examplesGrid}>
-              {EXAMPLE_PROMPTS.map((example, index) => (
+            {/* Example prompts */}
+            <View style={styles.examples}>
+              {EXAMPLE_PROMPTS.map((example, i) => (
                 <TouchableOpacity
-                  key={index}
-                  style={[styles.exampleChip, { backgroundColor: colors.surface, borderColor: 'rgba(0, 0, 0, 0.04)' }]}
+                  key={i}
+                  style={styles.exampleChip}
                   onPress={() => handleExamplePress(example)}
                   disabled={isNlpParsing}
-                  activeOpacity={0.7}
+                  activeOpacity={0.75}
                 >
-                  <MaterialIcons name="chat-bubble-outline" size={16} color={colors.primary} />
-                  <Text style={[styles.exampleChipText, { color: colors.onSurfaceVariant }]} numberOfLines={2}>
+                  <MaterialIcons name="lightbulb-outline" size={14} color={C.primary} style={{ marginTop: 1 }} />
+                  <Text style={styles.exampleText} numberOfLines={2}>
                     {example}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Manual navigation switcher */}
-            <TouchableOpacity style={styles.manualEntryBtn} onPress={handleManualEntry}>
-              <Text style={[styles.manualText, { color: colors.outline }]}>
-                Prefer manually adding stops?{' '}
-                <Text style={{ color: colors.primary, fontWeight: '600' }}>Open Builder →</Text>
+            {/* Manual link */}
+            <TouchableOpacity
+              style={styles.manualLink}
+              onPress={() => router.push('/(tabs)/journey/new-stop' as any)}
+            >
+              <Text style={styles.manualLinkText}>
+                Durakları elle mi eklemek istersiniz?{' '}
+                <Text style={styles.manualLinkHighlight}>Planlayıcıyı Aç →</Text>
               </Text>
             </TouchableOpacity>
-
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -203,29 +162,10 @@ export default function NlpInputScreen() {
   );
 }
 
-// Add styles
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-  },
-  header: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-  },
-  headerBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: -0.4,
+    backgroundColor: C.background,
   },
   root: {
     flex: 1,
@@ -234,126 +174,110 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   container: {
-    flex: 1,
-    padding: Spacing.marginMain,
-    paddingTop: Spacing.stackLg,
-    gap: Spacing.stackLg,
+    padding: Spacing.gutter,
+    paddingTop: Spacing.xl,
+    gap: Spacing.xl,
+    paddingBottom: Spacing['3xl'],
   },
-  assistantIntro: {
+  // Intro
+  intro: {
     alignItems: 'center',
-    gap: 12,
-    marginTop: Spacing.stackSm,
+    gap: Spacing.md,
   },
-  sparkIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  introIcon: {
+    width: 68,
+    height: 68,
+    borderRadius: Rounded['2xl'],
+    backgroundColor: C.primaryFixed,
     alignItems: 'center',
     justifyContent: 'center',
   },
   introTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: -0.4,
+    ...Typography.h2,
+    color: C.text,
+    textAlign: 'center',
   },
   introSub: {
-    fontSize: 14,
+    ...Typography.body,
+    color: C.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
-    paddingHorizontal: 12,
+    lineHeight: 22,
+    paddingHorizontal: Spacing.base,
   },
+  // Input card
   inputCard: {
+    backgroundColor: C.surface,
     borderRadius: Rounded.xl,
-    padding: 16,
-    shadowColor: 'rgba(0, 0, 0, 0.02)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 1,
+    padding: Spacing.base,
+    borderWidth: 1.5,
+    borderColor: C.outlineVariant,
+    ...Shadow.sm,
+  },
+  inputCardFocused: {
+    borderColor: C.primary,
+    backgroundColor: C.surfaceContainerLowest,
   },
   textInput: {
-    fontSize: 16,
-    lineHeight: 24,
+    ...Typography.body,
+    color: C.text,
     minHeight: 120,
     padding: 0,
     textAlignVertical: 'top',
   },
   charCount: {
-    marginTop: 8,
-    fontSize: 12,
+    ...Typography.caption,
+    color: C.outline,
     textAlign: 'right',
+    marginTop: Spacing.sm,
   },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: Rounded.xl,
-    borderWidth: 1,
-  },
-  errorText: {
-    fontSize: 13,
-    fontWeight: '500',
-    flex: 1,
-  },
-  ctaBtn: {
-    height: 56,
-    borderRadius: Rounded.xl,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    shadowColor: 'rgba(42, 20, 180, 0.25)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  ctaBtnText: {
-    fontSize: 17,
-    fontWeight: '600',
-  },
+  // Divider
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginVertical: Spacing.stackSm,
+    gap: Spacing.md,
   },
   dividerLine: {
     flex: 1,
     height: 1,
+    backgroundColor: C.outlineVariant,
   },
   dividerText: {
-    fontSize: 12,
-    fontWeight: '500',
+    ...Typography.caption,
+    color: C.outline,
+    fontWeight: '600',
   },
-  examplesGrid: {
-    gap: 10,
+  // Examples
+  examples: {
+    gap: Spacing.sm,
   },
   exampleChip: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: Spacing.sm,
+    backgroundColor: C.surface,
     borderRadius: Rounded.xl,
+    padding: Spacing.base,
     borderWidth: 1,
-    padding: 14,
-    shadowColor: 'rgba(0, 0, 0, 0.01)',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    borderColor: C.outlineVariant,
   },
-  exampleChipText: {
-    fontSize: 13,
-    lineHeight: 18,
+  exampleText: {
+    ...Typography.bodySmall,
+    color: C.textSecondary,
     flex: 1,
+    lineHeight: 18,
   },
-  manualEntryBtn: {
+  // Manual link
+  manualLink: {
     alignItems: 'center',
-    paddingVertical: 12,
-    marginBottom: 40,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.xl,
   },
-  manualText: {
-    fontSize: 14,
+  manualLinkText: {
+    ...Typography.bodySmall,
+    color: C.textSecondary,
+  },
+  manualLinkHighlight: {
+    color: C.primary,
+    fontWeight: '600',
   },
 });

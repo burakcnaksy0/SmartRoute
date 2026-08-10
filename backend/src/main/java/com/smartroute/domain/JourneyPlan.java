@@ -59,6 +59,50 @@ public class JourneyPlan {
     @OrderBy("legOrder ASC")
     private List<PlanLeg> legs = new ArrayList<>();
 
+    @Column(name = "estimated_energy_cost", precision = 10, scale = 2)
+    private BigDecimal estimatedEnergyCost = BigDecimal.ZERO;
+
+    @Column(name = "requires_charging_stop", nullable = false)
+    private Boolean requiresChargingStop = false;
+
+    @Column(name = "charging_stop_count", nullable = false)
+    private Integer chargingStopCount = 0;
+
+    @OneToMany(mappedBy = "plan", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<ChargingStop> chargingStops = new ArrayList<>();
+
+    public BigDecimal getEstimatedEnergyCost() {
+        return estimatedEnergyCost;
+    }
+
+    public void setEstimatedEnergyCost(BigDecimal estimatedEnergyCost) {
+        this.estimatedEnergyCost = estimatedEnergyCost;
+    }
+
+    public Boolean getRequiresChargingStop() {
+        return requiresChargingStop;
+    }
+
+    public void setRequiresChargingStop(Boolean requiresChargingStop) {
+        this.requiresChargingStop = requiresChargingStop;
+    }
+
+    public Integer getChargingStopCount() {
+        return chargingStopCount;
+    }
+
+    public void setChargingStopCount(Integer chargingStopCount) {
+        this.chargingStopCount = chargingStopCount;
+    }
+
+    public List<ChargingStop> getChargingStops() {
+        return chargingStops;
+    }
+
+    public void setChargingStops(List<ChargingStop> chargingStops) {
+        this.chargingStops = chargingStops;
+    }
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

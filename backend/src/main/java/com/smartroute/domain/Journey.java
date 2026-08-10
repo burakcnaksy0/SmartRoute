@@ -50,6 +50,62 @@ public class Journey {
     @OneToMany(mappedBy = "journey", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<JourneyPlan> plans = new ArrayList<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "vehicle_id")
+    private Vehicle vehicle;
+
+    @Column(name = "actual_distance_meters")
+    private Integer actualDistanceMeters;
+
+    @Column(name = "actual_duration_seconds")
+    private Integer actualDurationSeconds;
+
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
+    @Column(name = "completion_status")
+    private String completionStatus;
+
+    public Vehicle getVehicle() {
+        return vehicle;
+    }
+
+    public void setVehicle(Vehicle vehicle) {
+        this.vehicle = vehicle;
+    }
+
+    public Integer getActualDistanceMeters() {
+        return actualDistanceMeters;
+    }
+
+    public void setActualDistanceMeters(Integer actualDistanceMeters) {
+        this.actualDistanceMeters = actualDistanceMeters;
+    }
+
+    public Integer getActualDurationSeconds() {
+        return actualDurationSeconds;
+    }
+
+    public void setActualDurationSeconds(Integer actualDurationSeconds) {
+        this.actualDurationSeconds = actualDurationSeconds;
+    }
+
+    public LocalDateTime getCompletedAt() {
+        return completedAt;
+    }
+
+    public void setCompletedAt(LocalDateTime completedAt) {
+        this.completedAt = completedAt;
+    }
+
+    public String getCompletionStatus() {
+        return completionStatus;
+    }
+
+    public void setCompletionStatus(String completionStatus) {
+        this.completionStatus = completionStatus;
+    }
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

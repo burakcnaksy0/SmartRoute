@@ -6,6 +6,7 @@ import com.smartroute.exception.InfeasiblePlanException;
 import com.smartroute.mapper.JourneyMapper;
 import com.smartroute.repository.JourneyPlanRepository;
 import com.smartroute.repository.JourneyRepository;
+import com.smartroute.repository.RouteFeedbackRepository;
 import com.smartroute.service.routing.DistanceMatrixResult;
 import com.smartroute.service.routing.GeoPoint;
 import com.smartroute.service.routing.RouteCandidate;
@@ -29,6 +30,7 @@ public class JourneyPlanningService {
     private final ExplainabilityService explainabilityService;
     private final JourneyMapper journeyMapper;
     private final com.smartroute.service.places.PlacesService placesService;
+    private final RouteFeedbackRepository routeFeedbackRepository;
 
     public JourneyPlanningService(
             JourneyRepository journeyRepository,
@@ -37,7 +39,8 @@ public class JourneyPlanningService {
             OptimizationEngine optimizationEngine,
             ExplainabilityService explainabilityService,
             JourneyMapper journeyMapper,
-            com.smartroute.service.places.PlacesService placesService) {
+            com.smartroute.service.places.PlacesService placesService,
+            RouteFeedbackRepository routeFeedbackRepository) {
         this.journeyRepository = journeyRepository;
         this.journeyPlanRepository = journeyPlanRepository;
         this.routingProvider = routingProvider;
@@ -45,6 +48,7 @@ public class JourneyPlanningService {
         this.explainabilityService = explainabilityService;
         this.journeyMapper = journeyMapper;
         this.placesService = placesService;
+        this.routeFeedbackRepository = routeFeedbackRepository;
     }
 
     @Transactional
@@ -125,6 +129,21 @@ public class JourneyPlanningService {
         if (selected == null) {
             throw new IllegalArgumentException("Plan bulunamadı.");
         }
+
+        // Save route feedback
+        RouteFeedback feedback = new RouteFeedback();
+        feedback.setUser(user);
+        feedback.setJourney(journey);
+        feedback.setSelectedPlanLabel(selected.getPlanLabel());
+
+        List<String> rejected = new ArrayList<>();
+        for (JourneyPlan plan : journey.getPlans()) {
+            if (!plan.getId().equals(planId)) {
+                rejected.add(plan.getPlanLabel());
+            }
+        }
+        feedback.setRejectedPlanLabels(String.join(",", rejected));
+        routeFeedbackRepository.save(feedback);
 
         journeyRepository.save(journey);
         return journeyMapper.toResponse(selected);
@@ -764,5 +783,35 @@ public class JourneyPlanningService {
             }
         }
         return difficulties;
+    }
+
+    @Transactional(readOnly = true)
+    public List<JourneyResponse> getUserJourneys(User user) {
+        List<Journey> journeys = journeyRepository.findByUserOrderByCreatedAtDesc(user);
+        return journeys.stream()
+                .map(journeyMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public JourneyStatisticsResponse getJourneyStatistics(User user) {
+        List<Journey> journeys = journeyRepository.findByUserOrderByCreatedAtDesc(user);
+        
+        long totalTrips = journeys.stream()
+                .filter(j -> "completed".equalsIgnoreCase(j.getStatus()))
+                .count();
+                
+        double totalDistanceKm = journeys.stream()
+                .filter(j -> "completed".equalsIgnoreCase(j.getStatus()) && j.getActualDistanceMeters() != null)
+                .mapToDouble(j -> j.getActualDistanceMeters() / 1000.0)
+                .sum();
+                
+        double totalSavings = totalDistanceKm * 1.5;
+        
+        JourneyStatisticsResponse stats = new JourneyStatisticsResponse();
+        stats.setTotalTrips(totalTrips);
+        stats.setTotalDistanceKm(totalDistanceKm);
+        stats.setTotalSavingsEur(totalSavings);
+        return stats;
     }
 }

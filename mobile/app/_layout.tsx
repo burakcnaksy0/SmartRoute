@@ -1,7 +1,7 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useSegments, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme, ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/store/authStore';
 
@@ -30,8 +30,8 @@ function NavigationLayout() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F172A' }}>
-        <ActivityIndicator size="large" color="#2563EB" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F6FA' }}>
+        <ActivityIndicator size="large" color="#3B35D0" />
       </View>
     );
   }
@@ -46,7 +46,6 @@ function NavigationLayout() {
 }
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const initialize = useAuthStore((state) => state.initialize);
 
   useEffect(() => {
@@ -54,7 +53,7 @@ export default function RootLayout() {
   }, [initialize]);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={DefaultTheme}>
       <AnimatedSplashOverlay />
       <NavigationLayout />
     </ThemeProvider>

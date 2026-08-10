@@ -18,13 +18,14 @@ import * as Notifications from 'expo-notifications';
 import { useJourneyStore } from '@/store/journeyStore';
 import { DepartureSuggestion } from '@/api/journey';
 import { Colors, Spacing, Rounded } from '@/constants/theme';
+import { ScreenHeader } from '@/components/ui/Header';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatTime(isoStr: string): string {
   try {
     const d = new Date(isoStr);
-    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
   } catch {
     return isoStr;
   }
@@ -33,8 +34,8 @@ function formatTime(isoStr: string): string {
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m} min`;
+  if (h > 0) return `${h} sa ${m} dk`;
+  return `${m} dk`;
 }
 
 function confidenceColor(confidence: number, colors: any): string {
@@ -44,9 +45,9 @@ function confidenceColor(confidence: number, colors: any): string {
 }
 
 function confidenceLabel(confidence: number): string {
-  if (confidence >= 0.85) return 'High Confidence';
-  if (confidence >= 0.65) return 'Moderate Risk';
-  return 'High Congestion';
+  if (confidence >= 0.85) return 'Yüksek Güvenilirlik';
+  if (confidence >= 0.65) return 'Orta Risk';
+  return 'Yoğun Trafik';
 }
 
 function ConfidenceBar({ value }: { value: number }) {
@@ -126,7 +127,7 @@ function SuggestionCard({
         {isBest && (
           <View style={[styles.bestBadge, { backgroundColor: colors.secondaryContainer }]}>
             <MaterialIcons name="star" size={14} color={colors.onSecondaryContainer} />
-            <Text style={[styles.bestBadgeText, { color: colors.onSecondaryContainer }]}>Recommended</Text>
+            <Text style={[styles.bestBadgeText, { color: colors.onSecondaryContainer }]}>Önerilen</Text>
           </View>
         )}
 
@@ -136,12 +137,12 @@ function SuggestionCard({
               {formatTime(suggestion.departureTime)}
             </Text>
             <Text style={[styles.suggDur, { color: colors.outline }]}>
-              {formatDuration(suggestion.estimatedDurationSeconds)} transit duration
+              {formatDuration(suggestion.estimatedDurationSeconds)} transit süresi
             </Text>
           </View>
           <View style={styles.confidenceBlock}>
             <Text style={[styles.confidencePct, { color }]}>
-              {Math.round(suggestion.arrivalConfidence * 100)}%
+              %{Math.round(suggestion.arrivalConfidence * 100)}
             </Text>
             <Text style={[styles.confidenceLabelText, { color }]}>
               {confidenceLabel(suggestion.arrivalConfidence)}
@@ -191,7 +192,7 @@ export default function DepartureSuggestionsScreen() {
 
   const handleFetch = async () => {
     if (!effectiveJourneyId) {
-      Alert.alert('Error', 'No journey active.');
+      Alert.alert('Hata', 'Aktif seyahat bulunamadı.');
       return;
     }
     setSelectedIdx(null);
@@ -222,9 +223,9 @@ export default function DepartureSuggestionsScreen() {
 
     if (finalStatus !== 'granted') {
       Alert.alert(
-        'Permissions Needed',
-        'Notification permission is required to schedule local reminders.',
-        [{ text: 'OK' }]
+        'İzin Gerekli',
+        'Bildirimleri ayarlamak için bildirim izni vermeniz gerekmektedir.',
+        [{ text: 'Tamam' }]
       );
       return;
     }
@@ -233,40 +234,29 @@ export default function DepartureSuggestionsScreen() {
     const remindAt = new Date(depDate.getTime() - 10 * 60 * 1000); // 10 min prior
 
     if (remindAt <= new Date()) {
-      Alert.alert('Immediate Departure', 'This departure window is in less than 10 minutes.');
+      Alert.alert('Hemen Çıkış', 'Bu yola çıkış zamanına 10 dakikadan az bir süre kaldı.');
       return;
     }
 
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🚗 Time to Leave!',
-        body: `You should start your journey at ${formatTime(suggestion.departureTime)} to avoid traffic.`,
+        title: '🚗 Yola Çıkma Vakti!',
+        body: `Trafikten kaçınmak için yolculuğunuza ${formatTime(suggestion.departureTime)} saatinde başlamalısınız.`,
         sound: true,
       },
       trigger: { date: remindAt } as any,
     });
 
     Alert.alert(
-      'Reminder Configured ✅',
-      `A reminder has been scheduled for ${formatTime(suggestion.departureTime)}.\n(You will receive a notification 10 minutes prior)`
+      'Hatırlatıcı Ayarlandı ✅',
+      `${formatTime(suggestion.departureTime)} için bir hatırlatıcı planlandı.\n(Yola çıkıştan 10 dakika önce bildirim alacaksınız)`
     );
   };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="dark-content" />
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: 'rgba(0,0,0,0.04)' }]}>
-        <TouchableOpacity 
-          style={styles.headerBtn} 
-          onPress={() => router.back()}
-          accessibilityLabel="Back"
-        >
-          <MaterialIcons name="chevron-left" size={28} color={colors.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Departure Advisor</Text>
-        <View style={styles.headerBtn} />
-      </View>
+      <ScreenHeader title="Akıllı Çıkış Önerisi" />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
@@ -275,15 +265,15 @@ export default function DepartureSuggestionsScreen() {
             <View style={[styles.clockIconBg, { backgroundColor: colors.primaryFixed }]}>
               <MaterialIcons name="schedule" size={32} color={colors.primary} />
             </View>
-            <Text style={[styles.introTitle, { color: colors.onSurface }]}>Smart Departure Recommendation</Text>
+            <Text style={[styles.introTitle, { color: colors.onSurface }]}>Akıllı Çıkış Önerisi</Text>
             <Text style={[styles.introSub, { color: colors.outline }]}>
-              Compare traffic models across different departure intervals to maximize arrival probability.
+              Varış olasılığını en üst düzeye çıkarmak için farklı çıkış aralıklarındaki trafik tahmin modellerini karşılaştırın.
             </Text>
           </View>
 
           {/* Target details */}
           <View style={[styles.targetCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.targetLabel, { color: colors.outline }]}>Target Arrival Time</Text>
+            <Text style={[styles.targetLabel, { color: colors.outline }]}>Hedef Varış Zamanı</Text>
             <Text style={[styles.targetTime, { color: colors.onSurface }]}>{formatTime(targetTime)}</Text>
           </View>
 
@@ -291,8 +281,8 @@ export default function DepartureSuggestionsScreen() {
           {isLoadingSuggestions && (
             <View style={styles.loadingBlock}>
               <ActivityIndicator color={colors.primary} size="large" />
-              <Text style={[styles.loadingText, { color: colors.onSurface }]}>Predicting traffic congestion patterns...</Text>
-              <Text style={[styles.loadingSubText, { color: colors.outline }]}>Best Guess • Optimistic • Pessimistic Models</Text>
+              <Text style={[styles.loadingText, { color: colors.onSurface }]}>Trafik yoğunluğu modelleri tahmin ediliyor...</Text>
+              <Text style={[styles.loadingSubText, { color: colors.outline }]}>En İyi Tahmin • İyimser • Kötümser Modeller</Text>
             </View>
           )}
 
@@ -302,7 +292,7 @@ export default function DepartureSuggestionsScreen() {
               <MaterialIcons name="warning" size={18} color={colors.error} />
               <Text style={[styles.errorText, { color: colors.error }]}>{suggestionsError}</Text>
               <TouchableOpacity style={[styles.retryBtn, { backgroundColor: colors.error }]} onPress={handleFetch}>
-                <Text style={styles.retryBtnText}>Retry Prediction</Text>
+                <Text style={styles.retryBtnText}>Tahmini Yeniden Dene</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -311,7 +301,7 @@ export default function DepartureSuggestionsScreen() {
           {sorted && !isLoadingSuggestions && (
             <>
               <Text style={[styles.sectionTitle, { color: colors.outline }]}>
-                {sorted.length} Alternatives Evaluated
+                {sorted.length} Alternatif Değerlendirildi
               </Text>
               {sorted.map((s, i) => (
                 <SuggestionCard
@@ -344,7 +334,7 @@ export default function DepartureSuggestionsScreen() {
                   { color: colors.onPrimary },
                   selectedIdx == null && { color: colors.outline }
                 ]}>
-                  Set Alarm Notification
+                  Bildirim Alarmı Kur
                 </Text>
               </TouchableOpacity>
 
@@ -352,7 +342,7 @@ export default function DepartureSuggestionsScreen() {
                 style={[styles.secondaryBtn, { borderColor: colors.outlineVariant }]}
                 onPress={() => router.back()}
               >
-                <Text style={[styles.secondaryBtnText, { color: colors.onSurfaceVariant }]}>Go Back</Text>
+                <Text style={[styles.secondaryBtnText, { color: colors.onSurfaceVariant }]}>Geri Dön</Text>
               </TouchableOpacity>
             </View>
           )}

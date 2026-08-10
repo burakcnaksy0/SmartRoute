@@ -13,37 +13,46 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import MapView, { Marker, Polyline } from 'react-native-maps';
+import { decodePolyline } from '@/utils/polyline';
 import { useJourneyStore } from '@/store/journeyStore';
+import { useVehicleStore } from '@/store/vehicleStore';
 import StopList, { StopListItem } from '@/components/StopList';
-import { Colors, Spacing, Rounded } from '@/constants/theme';
+import { Colors, Spacing, Rounded, Shadow } from '@/constants/theme';
+import ExplainabilityBadge from '@/components/ExplainabilityBadge';
+import SocSlider from '@/components/SocSlider';
+import { ScreenHeader } from '@/components/ui/Header';
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m} min`;
+  if (h > 0) return `${h} sa ${m} dk`;
+  return `${m} dk`;
 }
 
 function formatDistance(meters: number): string {
-  const miles = meters * 0.000621371; // Convert to miles matching the mockups
-  return `${miles.toFixed(1)} mi`;
+  const km = meters / 1000;
+  return `${km.toFixed(1)} km`;
 }
 
 function formatCost(amount: number | null | undefined): string {
-  if (amount == null || isNaN(amount)) return '$0.00';
-  return `$${amount.toFixed(2)}`;
+  if (amount == null || isNaN(amount)) return '₺0,00';
+  return `₺${amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 const PLAN_META: Record<string, { title: string; subtitle: string; icon: keyof typeof MaterialIcons.glyphMap; color: string; bg: string }> = {
-  recommended: { title: 'Recommended', subtitle: 'Best Balanced', icon: 'star', color: '#006C49', bg: '#6CF8BB18' },
-  fastest:     { title: 'Fastest', subtitle: 'Quickest Path', icon: 'bolt', color: '#2A14B4', bg: '#E3DFFF' },
-  cheapest:    { title: 'Cheapest', subtitle: 'Eco Route', icon: 'payments', color: '#553300', bg: '#FFDDB8' },
+  recommended: { title: 'Önerilen', subtitle: 'En Dengeli', icon: 'star', color: '#006C49', bg: '#6CF8BB18' },
+  fastest:     { title: 'En Hızlı', subtitle: 'En Kısa Süre', icon: 'bolt', color: '#2A14B4', bg: '#E3DFFF' },
+  cheapest:    { title: 'En Ekonomik', subtitle: 'Eko Rota', icon: 'payments', color: '#553300', bg: '#FFDDB8' },
 };
 
 export default function PlanResultScreen() {
   const router = useRouter();
   const colors = Colors.light;
   const { currentJourney, isLoading, error, infeasibleConflictingStops, reorderStops } = useJourneyStore();
+  const { defaultVehicle, currentSocPercent, setSocPercent } = useVehicleStore();
+
+  const isEvVehicle = defaultVehicle?.fuelType === 'electric' || defaultVehicle?.fuelType === 'plugin_hybrid';
 
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [isManualOverride, setIsManualOverride] = useState(false);
@@ -89,7 +98,7 @@ export default function PlanResultScreen() {
   const selectedPlan = currentJourney?.plans.find(p => p.id === selectedPlanId);
   const hasCriticalRisk = stopOrder.some(s => s.hasTimeWindowRisk && s.priority === 'critical');
 
-  const openExternalMap = (provider: 'apple' | 'google') => {
+  const openExternalMap = (provider: 'apple' | 'osm') => {
     setShowMapSelector(false);
     if (!selectedPlan || !currentJourney) return;
 
@@ -104,14 +113,13 @@ export default function PlanResultScreen() {
     if (provider === 'apple') {
       url = `http://maps.apple.com/?saddr=${start}&daddr=${destination}`;
       if (waypoints) {
-        // Apple Maps handles multiple destinations via web addresses or sequential route paths
         url += `&daddr=${waypoints}|${destination}`;
       }
     } else {
-      url = `https://www.google.com/maps/dir/?api=1&origin=${start}&destination=${destination}`;
-      if (waypoints) {
-        url += `&waypoints=${waypoints}`;
-      }
+      // OpenStreetMap directions (works in any browser, no API key)
+      const startParts = start.split(',');
+      const destParts = destination.split(',');
+      url = `https://www.openstreetmap.org/directions?engine=osrm_car&route=${startParts[0]},${startParts[1]};${destParts[0]},${destParts[1]}`;
     }
     
     Linking.canOpenURL(url).then(supported => {
@@ -128,22 +136,16 @@ export default function PlanResultScreen() {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
         <StatusBar barStyle="dark-content" />
-        <View style={[styles.header, { borderBottomColor: 'rgba(0,0,0,0.04)' }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <MaterialIcons name="chevron-left" size={28} color={colors.primary} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Route Failed</Text>
-          <View style={styles.backButton} />
-        </View>
+        <ScreenHeader title="Rota Oluşturulamadı" />
         <View style={styles.errorContainer}>
           <View style={[styles.errorIconBg, { backgroundColor: colors.errorContainer }]}>
             <MaterialIcons name="warning" size={44} color={colors.error} />
           </View>
-          <Text style={[styles.errorTitle, { color: colors.onSurface }]}>Time Windows Conflict</Text>
+          <Text style={[styles.errorTitle, { color: colors.onSurface }]}>Zaman Pencereleri Çakışması</Text>
           <Text style={[styles.errorMessage, { color: colors.outline }]}>{error}</Text>
           {infeasibleConflictingStops && infeasibleConflictingStops.length > 0 && (
             <View style={[styles.conflictBox, { backgroundColor: colors.errorContainer + '15', borderColor: colors.error }]}>
-              <Text style={[styles.conflictLabel, { color: colors.error }]}>Conflicting Stops:</Text>
+              <Text style={[styles.conflictLabel, { color: colors.error }]}>Çakışan Duraklar:</Text>
               {infeasibleConflictingStops.map((name, i) => (
                 <Text key={i} style={[styles.conflictStop, { color: colors.onSurface }]}>• {name}</Text>
               ))}
@@ -153,7 +155,7 @@ export default function PlanResultScreen() {
             style={[styles.editConstraintsBtn, { backgroundColor: colors.primary }]} 
             onPress={() => router.back()}
           >
-            <Text style={[styles.editConstraintsBtnText, { color: colors.onPrimary }]}>Edit Constraints</Text>
+            <Text style={[styles.editConstraintsBtnText, { color: colors.onPrimary }]}>Kısıtlamaları Düzenle</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -165,7 +167,7 @@ export default function PlanResultScreen() {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }, styles.centered]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.outline }]}>Evaluating live traffic and calculating optimal routes...</Text>
+        <Text style={[styles.loadingText, { color: colors.outline }]}>Canlı trafik değerlendiriliyor ve en uygun rotalar hesaplanıyor...</Text>
       </SafeAreaView>
     );
   }
@@ -173,15 +175,7 @@ export default function PlanResultScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="dark-content" />
-      
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: 'rgba(0,0,0,0.04)' }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <MaterialIcons name="chevron-left" size={28} color={colors.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Journey Alternatives</Text>
-        <View style={styles.backButton} />
-      </View>
+      <ScreenHeader title="Yolculuk Alternatifleri" />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Critical stop risk alert banner */}
@@ -189,18 +183,69 @@ export default function PlanResultScreen() {
           <View style={[styles.riskAlert, { backgroundColor: colors.errorContainer + '15', borderColor: colors.error }]}>
             <View style={styles.riskAlertHeader}>
               <MaterialIcons name="warning" size={18} color={colors.error} />
-              <Text style={[styles.riskAlertTitle, { color: colors.error }]}>Time Window Violation Risk</Text>
+              <Text style={[styles.riskAlertTitle, { color: colors.error }]}>Zaman Penceresi İhlal Riski</Text>
             </View>
             <Text style={[styles.riskAlertText, { color: colors.error }]}>
-              There is a high probability of missing the arrival window for a critical stop. Please adjust priorities or shift times.
+              Kritik bir durak için varış penceresini kaçırma olasılığı yüksek. Lütfen öncelikleri ayarlayın veya saatleri kaydırın.
             </Text>
+          </View>
+        )}
+        {/* Interactive Map View */}
+        {selectedPlan && (
+          <View style={[styles.mapCardView, { backgroundColor: colors.surface, borderColor: colors.surfaceContainer }]}>
+            {Platform.OS !== 'web' ? (
+              <MapView
+                style={styles.map}
+                initialRegion={{
+                  latitude: currentJourney.startLat,
+                  longitude: currentJourney.startLng,
+                  latitudeDelta: 0.15,
+                  longitudeDelta: 0.15,
+                }}
+              >
+                <Marker
+                  coordinate={{ latitude: currentJourney.startLat, longitude: currentJourney.startLng }}
+                  title="Başlangıç Noktası"
+                  pinColor="green"
+                />
+                {currentJourney.stops.map((stop, idx) => (
+                  <Marker
+                    key={stop.id}
+                    coordinate={{ latitude: stop.lat, longitude: stop.lng }}
+                    title={`${idx + 1}. ${stop.placeName}`}
+                    pinColor={stop.priority === 'critical' ? 'red' : 'blue'}
+                  />
+                ))}
+                {selectedPlan.legs.map((leg, legIdx) => {
+                  if (!leg.polylineEncoded) return null;
+                  const points = decodePolyline(leg.polylineEncoded);
+                  return (
+                    <Polyline
+                      key={legIdx}
+                      coordinates={points}
+                      strokeColor={colors.primary}
+                      strokeWidth={4}
+                    />
+                  );
+                })}
+              </MapView>
+            ) : (
+              <View style={styles.webMapPlaceholder}>
+                <MaterialIcons name="map" size={32} color={colors.outline} />
+                <Text style={{ color: colors.outline, marginTop: 8, fontSize: 13 }}>Web platformunda harita gösterimi simüle edilmiştir.</Text>
+              </View>
+            )}
           </View>
         )}
 
         {/* Plan Selectors */}
-        <Text style={[styles.sectionLabel, { color: colors.outline }]}>Select Route Option</Text>
+        <Text style={[styles.sectionLabel, { color: colors.outline }]}>Rota Seçeneği Seçin</Text>
         {currentJourney.plans.map(plan => {
-          const meta = PLAN_META[plan.planLabel] ?? { title: plan.planLabel, subtitle: 'Alternative', icon: 'map', color: colors.outline, bg: colors.surfaceLow };
+          const isNeutral = plan.explanationText && (plan.explanationText.includes('Rotalar oldukça benzer') || plan.explanationText.includes('benzer'));
+          let meta = PLAN_META[plan.planLabel] ?? { title: plan.planLabel, subtitle: 'Alternatif', icon: 'map', color: colors.outline, bg: colors.surfaceLow };
+          if (isNeutral && plan.planLabel === 'recommended') {
+            meta = { title: 'Dengeli', subtitle: 'Alternatif', icon: 'map', color: colors.outline, bg: colors.surfaceLow };
+          }
           const isSelected = plan.id === selectedPlanId;
           const totalCost = (plan.totalTollCost ?? 0) + (plan.totalFuelCostEstimate ?? 0);
 
@@ -232,21 +277,21 @@ export default function PlanResultScreen() {
                   <Text style={[styles.metricValue, { color: colors.onSurface }]}>
                     {formatDuration(plan.totalDurationSeconds)}
                   </Text>
-                  <Text style={[styles.metricLabel, { color: colors.outline }]}>Duration</Text>
+                  <Text style={[styles.metricLabel, { color: colors.outline }]}>Süre</Text>
                 </View>
                 <View style={[styles.metricDivider, { backgroundColor: colors.surfaceContainer }]} />
                 <View style={styles.metric}>
                   <Text style={[styles.metricValue, { color: colors.onSurface }]}>
                     {formatDistance(plan.totalDistanceMeters)}
                   </Text>
-                  <Text style={[styles.metricLabel, { color: colors.outline }]}>Distance</Text>
+                  <Text style={[styles.metricLabel, { color: colors.outline }]}>Mesafe</Text>
                 </View>
                 <View style={[styles.metricDivider, { backgroundColor: colors.surfaceContainer }]} />
                 <View style={styles.metric}>
                   <Text style={[styles.metricValue, { color: colors.secondary }]}>
                     {formatCost(totalCost)}
                   </Text>
-                  <Text style={[styles.metricLabel, { color: colors.outline }]}>Estimated Cost</Text>
+                  <Text style={[styles.metricLabel, { color: colors.outline }]}>Tahmini Maliyet</Text>
                 </View>
               </View>
 
@@ -259,20 +304,40 @@ export default function PlanResultScreen() {
                     color={plan.trafficRiskScore < 0.3 ? colors.secondary : plan.trafficRiskScore < 0.6 ? colors.tertiary : colors.error} 
                   />
                   <Text style={[styles.trafficLabel, { color: colors.outline }]}>
-                    Traffic Congestion: {plan.trafficRiskScore < 0.3 ? 'Light' : plan.trafficRiskScore < 0.6 ? 'Moderate' : 'Heavy'}
+                    Trafik Yoğunluğu: {plan.trafficRiskScore < 0.3 ? 'Açık' : plan.trafficRiskScore < 0.6 ? 'Orta' : 'Yoğun'}
+                  </Text>
+                </View>
+              )}
+
+              {/* EV Charging Stop Badge (UX §11.5) */}
+              {plan.requiresChargingStop && (
+                <View style={styles.evChargingBadge}>
+                  <Text style={styles.evChargingIcon}>🔋</Text>
+                  <Text style={styles.evChargingText}>
+                    {plan.chargingStopCount === 1
+                      ? '1 şarj molası gerekiyor'
+                      : `${plan.chargingStopCount ?? 1} şarj molası gerekiyor`}
                   </Text>
                 </View>
               )}
 
               {/* Explanation Text */}
               {plan.explanationText && (
-                <Text style={[styles.explanation, { color: colors.onSurfaceVariant }]}>
-                  {plan.explanationText}
-                </Text>
+                <ExplainabilityBadge explanationText={plan.explanationText} />
               )}
             </TouchableOpacity>
           );
         })}
+
+        {/* SoC Slider for EV vehicles (UX §6.14) */}
+        {isEvVehicle && (
+          <View style={[styles.socCard, { backgroundColor: colors.surface }]}>
+            <SocSlider
+              value={currentSocPercent}
+              onChange={setSocPercent}
+            />
+          </View>
+        )}
 
         {/* Selected Plan Details & Stop Order Reordering */}
         {selectedPlan && (
@@ -283,14 +348,14 @@ export default function PlanResultScreen() {
                 <MaterialIcons name="insights" size={20} color={colors.onSecondaryContainer} />
               </View>
               <View style={styles.insightContent}>
-                <Text style={[styles.insightLabel, { color: colors.onSurface }]}>Route Insight</Text>
+                <Text style={[styles.insightLabel, { color: colors.onSurface }]}>Rota Analizi</Text>
                 <Text style={[styles.insightText, { color: colors.onSurfaceVariant }]}>
-                  {selectedPlan.explanationText || 'This route optimizes traffic patterns and prioritizes your critical stop windows.'}
+                  {selectedPlan.explanationText || 'Bu rota trafik modellerini optimize eder ve kritik durak pencerelerinize öncelik verir.'}
                 </Text>
               </View>
             </View>
 
-            <Text style={[styles.sectionLabel, { color: colors.outline }]}>Stops Itinerary</Text>
+            <Text style={[styles.sectionLabel, { color: colors.outline }]}>Durak Listesi</Text>
             <StopList
               stops={stopOrder}
               onReorder={handleReorder}
@@ -328,7 +393,7 @@ export default function PlanResultScreen() {
             >
               <MaterialIcons name="navigation" size={20} color={colors.onPrimary} />
               <Text style={[styles.ctaBtnText, { color: colors.onPrimary }]}>
-                Start Navigation
+                Navigasyonu Başlat
               </Text>
             </TouchableOpacity>
           </View>
@@ -338,12 +403,12 @@ export default function PlanResultScreen() {
             <View style={[styles.mapOptionsPopover, { backgroundColor: colors.surface }]}>
               <TouchableOpacity style={styles.popoverItem} onPress={() => openExternalMap('apple')}>
                 <MaterialIcons name="map" size={20} color={colors.primary} />
-                <Text style={[styles.popoverText, { color: colors.onSurface }]}>Open in Apple Maps</Text>
+                <Text style={[styles.popoverText, { color: colors.onSurface }]}>Apple Haritalar ile Aç</Text>
               </TouchableOpacity>
               <View style={[styles.popoverDivider, { backgroundColor: colors.surfaceContainer }]} />
-              <TouchableOpacity style={styles.popoverItem} onPress={() => openExternalMap('google')}>
+              <TouchableOpacity style={styles.popoverItem} onPress={() => openExternalMap('osm')}>
                 <MaterialIcons name="explore" size={20} color={colors.primary} />
-                <Text style={[styles.popoverText, { color: colors.onSurface }]}>Open in Google Maps</Text>
+                <Text style={[styles.popoverText, { color: colors.onSurface }]}>OpenStreetMap ile Aç</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -414,6 +479,22 @@ const styles = StyleSheet.create({
   riskAlertText: {
     fontSize: 13,
     lineHeight: 18,
+  },
+  mapCardView: {
+    height: 220,
+    borderRadius: Rounded.xl,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: Spacing.stackMd,
+  },
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  webMapPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
   },
   planCard: {
     borderRadius: Rounded.xl,
@@ -493,6 +574,37 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontStyle: 'italic',
     marginTop: 10,
+  },
+  evChargingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    alignSelf: 'flex-start',
+  },
+  evChargingIcon: {
+    fontSize: 13,
+  },
+  evChargingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1D4ED8',
+  },
+  socCard: {
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   detailsContainer: {
     marginTop: Spacing.stackMd,
