@@ -4,6 +4,7 @@ import com.smartroute.domain.*;
 import com.smartroute.dto.*;
 import com.smartroute.repository.JourneyRepository;
 import com.smartroute.repository.JourneyStopRepository;
+import com.smartroute.service.routing.GeoPoint;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +30,13 @@ public class PlacesServiceTest {
     private JourneyStopRepository journeyStopRepository;
 
     @Mock
-    private GooglePlacesProvider googlePlacesProvider;
+    private OsmPlacesProvider osmPlacesProvider;
+
+    @Mock
+    private GeocodingProvider geocodingProvider;
+
+    @Mock
+    private ParkingProvider parkingProvider;
 
     @InjectMocks
     private PlacesService placesService;
@@ -88,7 +95,7 @@ public class PlacesServiceTest {
         poi.setRating(4.5);
         poi.setUserRatingsTotal(100);
 
-        when(googlePlacesProvider.searchNearby(anyDouble(), anyDouble(), anyInt(), eq("pharmacy")))
+        when(osmPlacesProvider.searchNearby(anyDouble(), anyDouble(), anyInt(), eq("pharmacy")))
                 .thenReturn(List.of(poi));
 
         List<AlongRoutePoiResponse> result = placesService.getAlongRoutePoi(
@@ -104,14 +111,18 @@ public class PlacesServiceTest {
     void testGetParkingOptions() {
         when(journeyStopRepository.findById(stop.getId())).thenReturn(Optional.of(stop));
 
-        GooglePlaceResult lot = new GooglePlaceResult();
-        lot.setPlaceId("lot1");
-        lot.setName("Otopark");
-        lot.setVicinity("Istanbul");
-        lot.setLat(41.011);
-        lot.setLng(28.971);
+        ParkingResult lot = new ParkingResult(
+                "lot1",
+                "Otopark",
+                41.011,
+                28.971,
+                100,
+                50,
+                true,
+                "public"
+        );
 
-        when(googlePlacesProvider.searchNearby(eq(41.01), eq(28.97), anyInt(), eq("parking")))
+        when(parkingProvider.findNearby(any(GeoPoint.class), anyInt()))
                 .thenReturn(List.of(lot));
 
         List<ParkingOptionResponse> result = placesService.getParkingOptions(stop.getId(), user);

@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@org.junit.jupiter.api.Disabled("GoogleRoutesProvider is deprecated and disabled")
 class GoogleRoutesProviderTest {
 
     private static WireMockServer wireMockServer;

@@ -117,4 +117,11 @@ public class JourneyController {
         User user = getCurrentUser();
         return ResponseEntity.ok(journeyPlanningService.getJourneyStatistics(user));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteJourney(@PathVariable UUID id) {
+        User user = getCurrentUser();
+        journeyPlanningService.deleteJourney(id, user);
+        return ResponseEntity.noContent().build();
+    }
 }

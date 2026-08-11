@@ -1,0 +1,145 @@
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;overflow-x:hidden;}body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"on-error-container":"#93000a","inverse-on-surface":"#ecf1ff","surface-container-highest":"#d8e3fb","tertiary-fixed-dim":"#ffb95f","surface-variant":"#d8e3fb","surface-bright":"#f9f9ff","primary":"#2a14b4","on-surface-variant":"#464554","primary-fixed-dim":"#c3c0ff","on-secondary-fixed":"#002113","tertiary":"#553300","on-primary-container":"#c1beff","on-tertiary-fixed":"#2a1700","surface-container":"#e7eeff","surface-container-low":"#f0f3ff","primary-fixed":"#e3dfff","tertiary-container":"#744800","secondary-fixed":"#6ffbbe","on-background":"#111c2d","on-secondary-fixed-variant":"#005236","on-primary":"#ffffff","outline":"#777586","secondary-fixed-dim":"#4edea3","error":"#ba1a1a","on-error":"#ffffff","on-secondary":"#ffffff","surface-tint":"#5148d7","on-primary-fixed-variant":"#372abf","surface":"#f9f9ff","tertiary-fixed":"#ffddb8","on-secondary-container":"#00714d","inverse-primary":"#c3c0ff","inverse-surface":"#263143","error-container":"#ffdad6","on-tertiary":"#ffffff","primary-container":"#4338ca","surface-dim":"#cfdaf2","secondary-container":"#6cf8bb","outline-variant":"#c7c4d7","surface-container-high":"#dee8ff","background":"#f9f9ff","secondary":"#006c49","on-tertiary-fixed-variant":"#653e00","on-surface":"#111c2d","on-primary-fixed":"#100069","surface-container-lowest":"#ffffff"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"stack-sm":"0.5rem","stack-lg":"1.5rem","touch-target-min":"44px","margin-main":"1.25rem","stack-md":"1rem","gutter":"1rem"},"fontFamily":{"label-sm":["Inter"],"display":["Inter"],"headline-md":["Inter"],"headline-lg":["Inter"],"body-md":["Inter"],"body-lg":["Inter"],"headline-lg-mobile":["Inter"]},"fontSize":{"label-sm":["13px",{"lineHeight":"18px","letterSpacing":"0px","fontWeight":"500"}],"display":["34px",{"lineHeight":"41px","letterSpacing":"-0.4px","fontWeight":"700"}],"headline-md":["22px",{"lineHeight":"28px","letterSpacing":"-0.4px","fontWeight":"600"}],"headline-lg":["28px",{"lineHeight":"34px","letterSpacing":"-0.4px","fontWeight":"700"}],"body-md":["15px",{"lineHeight":"20px","letterSpacing":"-0.2px","fontWeight":"400"}],"body-lg":["17px",{"lineHeight":"22px","letterSpacing":"-0.4px","fontWeight":"400"}],"headline-lg-mobile":["24px",{"lineHeight":"30px","letterSpacing":"-0.4px","fontWeight":"700"}]}}}}</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head><body class="bg-background font-body-lg text-on-surface"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 px-margin-main flex items-center justify-between"><div class="flex items-center gap-stack-sm"><img alt="SmartRoute Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmEEfjW0VTDnUjQh9LVlk_lYba3U5gKtTg1mWpJN9ZQ4XJp0XxldVKDvTevDNgkQrJy-AJ5LPqQipkLln8emAo1Mo0Zzu_YdKAmQVOKGib-VwjRKujt44T-eV8oTl02Hy6ukxLxGIHGb7WOKxzlSRFaY9_YLmj84zcvmQVUChvRvXukoQAKgrPu0cFSdqhnkjsHDtt4uYSVMuLNAyfs5mJuGs2cLviVAEO4OmzfjYUQyXW8fPzDssl5w"/><span class="font-headline-md text-headline-md text-on-surface">SmartRoute</span></div><div class="flex items-center gap-stack-md"><span class="hidden md:block font-headline-lg-mobile text-headline-lg-mobile">Seyahat</span><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="relative w-full pt-16 pb-24 bg-background min-h-screen"><div class="px-margin-main pt-stack-lg"><h1 class="font-headline-lg text-headline-lg mb-stack-lg">Seyahat</h1><div class="flex flex-col w-full px-margin-main pb-safe">
+<!-- Search Bar -->
+<div class="relative w-full mb-stack-lg group">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-on-surface-variant/60 text-[20px]">search</span>
+</div>
+<input autocomplete="off" class="w-full bg-surface-container-low text-on-surface placeholder-on-surface-variant/60 font-body-lg rounded-[16px] py-4 pl-10 pr-10 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-surface transition-all shadow-[0_2px_8px_rgba(0,0,0,0.02)]" id="stop-search-input" placeholder="Nereye?" type="text"/>
+<button class="absolute inset-y-0 right-0 pr-3 flex items-center text-on-surface-variant/60 hover:text-primary transition-colors hidden" id="clear-search-btn">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Shortcuts Grid -->
+<div class="grid grid-cols-3 gap-stack-sm mb-stack-lg">
+<button class="flex flex-col items-center justify-center p-stack-sm bg-surface-container-low hover:bg-surface-container rounded-xl transition-colors active:scale-95 shadow-[0_1px_4px_rgba(0,0,0,0.02)]">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-1">
+<span class="material-symbols-outlined text-primary text-[20px]">my_location</span>
+</div>
+<span class="font-label-sm text-on-surface text-center">Mevcut</span>
+</button>
+<button class="flex flex-col items-center justify-center p-stack-sm bg-surface-container-low hover:bg-surface-container rounded-xl transition-colors active:scale-95 shadow-[0_1px_4px_rgba(0,0,0,0.02)]">
+<div class="w-10 h-10 rounded-full bg-secondary-container/30 flex items-center justify-center mb-1">
+<span class="material-symbols-outlined text-secondary text-[20px]">home</span>
+</div>
+<span class="font-label-sm text-on-surface text-center">Ev</span>
+</button>
+<button class="flex flex-col items-center justify-center p-stack-sm bg-surface-container-low hover:bg-surface-container rounded-xl transition-colors active:scale-95 shadow-[0_1px_4px_rgba(0,0,0,0.02)]">
+<div class="w-10 h-10 rounded-full bg-tertiary-container/20 flex items-center justify-center mb-1">
+<span class="material-symbols-outlined text-tertiary text-[20px]">work</span>
+</div>
+<span class="font-label-sm text-on-surface text-center">İş</span>
+</button>
+</div>
+<!-- Recent Stops Section -->
+<section class="mb-stack-lg animate-fade-in-up" style="animation-delay: 0.05s;">
+<div class="flex items-center justify-between mb-stack-sm">
+<h2 class="font-headline-md text-headline-md text-on-surface">Son Aramalar</h2>
+<button class="font-label-sm text-primary hover:text-primary-fixed-variant transition-colors">Temizle</button>
+</div>
+<div class="bg-surface-container-lowest rounded-[24px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
+<!-- Item 1 -->
+<div class="flex items-center p-stack-md hover:bg-surface-container-low transition-colors cursor-pointer active:bg-surface-container border-b border-surface-container-low">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center mr-4 shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">history</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-body-lg text-on-surface truncate">Central Station</h3>
+<p class="font-body-md text-on-surface-variant truncate">Market St &amp; 1st Ave</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant/40 ml-2">north_west</span>
+</div>
+<!-- Item 2 -->
+<div class="flex items-center p-stack-md hover:bg-surface-container-low transition-colors cursor-pointer active:bg-surface-container">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center mr-4 shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">history</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-body-lg text-on-surface truncate">Whole Foods Market</h3>
+<p class="font-body-md text-on-surface-variant truncate">399 4th St</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant/40 ml-2">north_west</span>
+</div>
+</div>
+</section>
+<!-- Suggested Section -->
+<section class="mb-stack-lg animate-fade-in-up" style="animation-delay: 0.1s;">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-stack-sm">Önerilenler</h2>
+<div class="bg-surface-container-lowest rounded-[24px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
+<!-- Item 1 -->
+<div class="flex items-center p-stack-md hover:bg-surface-container-low transition-colors cursor-pointer active:bg-surface-container border-b border-surface-container-low">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-4 shrink-0">
+<span class="material-symbols-outlined text-primary text-[20px]">star</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-body-lg text-on-surface truncate">Airport Terminal 1</h3>
+<p class="font-body-md text-on-surface-variant truncate">Buradan genelde 45 dk</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant/40 ml-2">north_west</span>
+</div>
+<!-- Item 2 -->
+<div class="flex items-center p-stack-md hover:bg-surface-container-low transition-colors cursor-pointer active:bg-surface-container border-b border-surface-container-low">
+<div class="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center mr-4 shrink-0">
+<span class="material-symbols-outlined text-secondary text-[20px]">directions_subway</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-body-lg text-on-surface truncate">Downtown Transit Center</h3>
+<p class="font-body-md text-on-surface-variant truncate">Kırmızı Hattaki bağlantı</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant/40 ml-2">north_west</span>
+</div>
+<!-- Item 3 -->
+<div class="flex items-center p-stack-md hover:bg-surface-container-low transition-colors cursor-pointer active:bg-surface-container">
+<div class="w-10 h-10 rounded-full bg-tertiary/10 flex items-center justify-center mr-4 shrink-0">
+<span class="material-symbols-outlined text-tertiary text-[20px]">park</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-body-lg text-on-surface truncate">City Park</h3>
+<p class="font-body-md text-on-surface-variant truncate">Hafta sonu favorisi</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant/40 ml-2">north_west</span>
+</div>
+</div>
+</section>
+</div>
+<style>
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-fade-in-up {
+    animation: fadeInUp 0.4s ease-out forwards;
+    opacity: 0;
+  }
+</style>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('stop-search-input');
+    const clearBtn = document.getElementById('clear-search-btn');
+
+    searchInput.addEventListener('input', () => {
+      if (searchInput.value.length > 0) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      clearBtn.classList.add('hidden');
+      searchInput.focus();
+    });
+  });
+</script></div></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/80 backdrop-blur-xl shadow-[0_-1px_8px_rgba(0,0,0,0.04)]" data-active-classes="text-primary font-medium"><div class="flex justify-around items-center h-16 px-gutter"><a aria-current="page" class="flex flex-col items-center justify-center min-w-[touch-target-min] transition-colors text-primary font-medium" data-path="journey" href="#"><span class="material-symbols-outlined">explore</span><span class="font-label-sm text-label-sm">Seyahat</span></a><a class="flex flex-col items-center justify-center min-w-[touch-target-min] text-on-surface-variant transition-colors" data-path="activity" href="#"><span class="material-symbols-outlined">history</span><span class="font-label-sm text-label-sm">Aktivite</span></a><a class="flex flex-col items-center justify-center min-w-[touch-target-min] text-on-surface-variant transition-colors" data-path="vehicles" href="#"><span class="material-symbols-outlined">directions_car</span><span class="font-label-sm text-label-sm">Araçlar</span></a><a class="flex flex-col items-center justify-center min-w-[touch-target-min] text-on-surface-variant transition-colors" data-path="settings" href="#"><span class="material-symbols-outlined">settings</span><span class="font-label-sm text-label-sm">Ayarlar</span></a></div></nav></body></html>

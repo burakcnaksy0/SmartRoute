@@ -14,4 +14,5 @@ import java.util.UUID;
 public interface TripExpenseRepository extends JpaRepository<TripExpense, UUID> {
     Optional<TripExpense> findByJourney(Journey journey);
     List<TripExpense> findAllByVehicle(Vehicle vehicle);
+    void deleteByJourney(Journey journey);
 }

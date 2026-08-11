@@ -1,5 +1,6 @@
 package com.smartroute.repository;
 
+import com.smartroute.domain.Journey;
 import com.smartroute.domain.RouteFeedback;
 import com.smartroute.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,4 +13,5 @@ import java.util.UUID;
 public interface RouteFeedbackRepository extends JpaRepository<RouteFeedback, UUID> {
     List<RouteFeedback> findAllByUser(User user);
     List<RouteFeedback> findAllByUserOrderByCreatedAtDesc(User user);
+    void deleteByJourney(Journey journey);
 }

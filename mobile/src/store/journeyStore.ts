@@ -22,6 +22,8 @@ interface JourneyState {
 
   // Draft stops for manual creation/editing
   draftStops: JourneyStopRequest[];
+  draftStartLocation: { latitude: number; longitude: number; address: string } | null;
+  draftDestination: { latitude: number; longitude: number; address: string } | null;
   infeasibleConflictingStops: string[] | null;
 
   // NLP flow
@@ -42,8 +44,11 @@ interface JourneyState {
   fetchDepartureSuggestions: (journeyId: string, targetArrivalTime: string) => Promise<boolean>;
   fetchHistoryJourneys: () => Promise<boolean>;
   fetchStatistics: () => Promise<boolean>;
+  deleteJourney: (id: string) => Promise<boolean>;
   
-  // Draft stop actions
+  // Draft location & stop actions
+  setDraftStartLocation: (loc: { latitude: number; longitude: number; address: string } | null) => void;
+  setDraftDestination: (dest: { latitude: number; longitude: number; address: string } | null) => void;
   addDraftStop: (stop: JourneyStopRequest) => void;
   updateDraftStop: (index: number, stop: Partial<JourneyStopRequest>) => void;
   deleteDraftStop: (index: number) => void;
@@ -79,6 +84,8 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
   statistics: null,
   isHistoryLoading: false,
   draftStops: [],
+  draftStartLocation: null,
+  draftDestination: null,
   infeasibleConflictingStops: null,
 
   nlpParsedResult: null,
@@ -183,7 +190,31 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
     }
   },
 
-  // Draft stops management
+  deleteJourney: async (id: string) => {
+    try {
+      await journeyApi.deleteJourney(id);
+      set((state) => ({
+        historyJourneys: state.historyJourneys.filter((j) => j.id !== id),
+        currentJourney: state.currentJourney?.id === id ? null : state.currentJourney,
+      }));
+      // Refresh stats in background
+      get().fetchStatistics();
+      return true;
+    } catch (e: any) {
+      console.error('Delete journey error:', e);
+      return false;
+    }
+  },
+
+  // Draft location & stops management
+  setDraftStartLocation: (loc) => {
+    set({ draftStartLocation: loc });
+  },
+
+  setDraftDestination: (dest) => {
+    set({ draftDestination: dest });
+  },
+
   addDraftStop: (stop: JourneyStopRequest) => {
     set(state => ({
       draftStops: [...state.draftStops, stop]
@@ -335,6 +366,8 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
       isLoading: false,
       error: null,
       draftStops: [],
+      draftStartLocation: null,
+      draftDestination: null,
       infeasibleConflictingStops: null,
       nlpParsedResult: null,
       isNlpParsing: false,

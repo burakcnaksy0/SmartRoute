@@ -7,6 +7,7 @@ import com.smartroute.mapper.JourneyMapper;
 import com.smartroute.repository.JourneyPlanRepository;
 import com.smartroute.repository.JourneyRepository;
 import com.smartroute.repository.RouteFeedbackRepository;
+import com.smartroute.repository.TripExpenseRepository;
 import com.smartroute.service.routing.DistanceMatrixResult;
 import com.smartroute.service.routing.GeoPoint;
 import com.smartroute.service.routing.RouteCandidate;
@@ -31,6 +32,7 @@ public class JourneyPlanningService {
     private final JourneyMapper journeyMapper;
     private final com.smartroute.service.places.PlacesService placesService;
     private final RouteFeedbackRepository routeFeedbackRepository;
+    private final TripExpenseRepository tripExpenseRepository;
 
     public JourneyPlanningService(
             JourneyRepository journeyRepository,
@@ -40,7 +42,8 @@ public class JourneyPlanningService {
             ExplainabilityService explainabilityService,
             JourneyMapper journeyMapper,
             com.smartroute.service.places.PlacesService placesService,
-            RouteFeedbackRepository routeFeedbackRepository) {
+            RouteFeedbackRepository routeFeedbackRepository,
+            TripExpenseRepository tripExpenseRepository) {
         this.journeyRepository = journeyRepository;
         this.journeyPlanRepository = journeyPlanRepository;
         this.routingProvider = routingProvider;
@@ -49,6 +52,7 @@ public class JourneyPlanningService {
         this.journeyMapper = journeyMapper;
         this.placesService = placesService;
         this.routeFeedbackRepository = routeFeedbackRepository;
+        this.tripExpenseRepository = tripExpenseRepository;
     }
 
     @Transactional
@@ -228,8 +232,16 @@ public class JourneyPlanningService {
 
         for (String profileLabel : profilesToCompute) {
             String engineProfile = profileToEngineProfile.get(profileLabel);
-            List<Integer> bestPerm = optimizationEngine.findBestPermutationForProfile(
-                    feasiblePaths, engineProfile, stopParkingDifficulties, stopTrafficRisks);
+            List<Integer> bestPerm;
+            if (request.getPreferences() != null && request.getPreferences().isPreserveStopOrder()) {
+                bestPerm = new ArrayList<>();
+                for (int i = 1; i <= journey.getStops().size(); i++) {
+                    bestPerm.add(i);
+                }
+            } else {
+                bestPerm = optimizationEngine.findBestPermutationForProfile(
+                        feasiblePaths, engineProfile, stopParkingDifficulties, stopTrafficRisks);
+            }
 
             // Compute exact routes leg-by-leg
             JourneyPlan plan = buildDetailedPlan(journey, bestPerm, request, profileLabel);
@@ -813,5 +825,17 @@ public class JourneyPlanningService {
         stats.setTotalDistanceKm(totalDistanceKm);
         stats.setTotalSavingsEur(totalSavings);
         return stats;
+    }
+
+    @Transactional
+    public void deleteJourney(UUID id, User user) {
+        Journey journey = journeyRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Yolculuk bulunamadı."));
+        if (!journey.getUser().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("Bu yolculuğu silme yetkiniz yok.");
+        }
+        routeFeedbackRepository.deleteByJourney(journey);
+        tripExpenseRepository.deleteByJourney(journey);
+        journeyRepository.delete(journey);
     }
 }

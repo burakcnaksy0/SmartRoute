@@ -66,8 +66,10 @@ export interface PlanLeg {
 }
 
 export interface JourneyPlan {
-  id: string;
-  planLabel: string;
+  id?: string;
+  planId?: string;
+  planLabel?: string;
+  label?: string;
   totalDurationSeconds: number;
   totalDistanceMeters: number;
   totalTollCost: number;
@@ -77,6 +79,7 @@ export interface JourneyPlan {
   overallScore: number;
   isSelected: boolean;
   explanationText?: string;
+  explanation?: string;
   requiresChargingStop?: boolean;
   chargingStopCount?: number;
   legs: PlanLeg[];
@@ -97,6 +100,7 @@ export interface Journey {
 
 export interface DepartureSuggestion {
   departureTime: string;
+  borderCrossingDelaySeconds?: number;
   arrivalConfidence: number;
   estimatedDurationSeconds: number;
 }
@@ -121,31 +125,55 @@ export interface JourneyStatistics {
   totalSavingsEur: number;
 }
 
+export interface CalculateRouteParams {
+  origin: { latitude: number; longitude: number };
+  destination: { latitude: number; longitude: number };
+  waypoints?: { latitude: number; longitude: number }[];
+  options?: {
+    preferredRouteType?: 'FASTEST' | 'SHORTEST' | 'CHEAPEST' | 'BALANCED';
+    avoidTolls?: boolean;
+    avoidHighways?: boolean;
+    preserveStopOrder?: boolean;
+    fuelConsumption?: number;
+    fuelPrice?: number;
+  };
+}
+
+export interface CalculateRouteResult {
+  totalDistanceMeters: number;
+  totalDurationSeconds: number;
+  tollCost: number;
+  fuelCostEstimate: number;
+  optimizedStopOrder: number[];
+  polyline: string;
+  explanation: string;
+}
+
 // ─── API Functions ────────────────────────────────────────────────────────────
 
 export const journeyApi = {
   getJourneys: async (): Promise<Journey[]> => {
-    const response = await api.get<Journey[]>('/journeys');
+    const response = await api.get('/journeys');
     return response.data;
   },
 
   getStatistics: async (): Promise<JourneyStatistics> => {
-    const response = await api.get<JourneyStatistics>('/journeys/statistics');
+    const response = await api.get('/journeys/statistics');
     return response.data;
   },
 
   parseNlp: async (text: string): Promise<NlpParseResult> => {
-    const response = await api.post<NlpParseResult>('/journeys/parse-nlp', { text });
+    const response = await api.post('/journeys/parse-nlp', { text });
     return response.data;
   },
 
   createDraft: async (request: JourneyRequest): Promise<Journey> => {
-    const response = await api.post<Journey>('/journeys', request);
+    const response = await api.post('/journeys', request);
     return response.data;
   },
 
   getJourney: async (id: string): Promise<Journey> => {
-    const response = await api.get<Journey>(`/journeys/${id}`);
+    const response = await api.get(`/journeys/${id}`);
     return response.data;
   },
 
@@ -159,17 +187,17 @@ export const journeyApi = {
       vehicleType?: string;
     }
   ): Promise<Journey> => {
-    const response = await api.post<Journey>(`/journeys/${id}/optimize`, params);
+    const response = await api.post(`/journeys/${id}/optimize`, params);
     return response.data;
   },
 
   getPlans: async (id: string): Promise<JourneyPlan[]> => {
-    const response = await api.get<JourneyPlan[]>(`/journeys/${id}/plans`);
+    const response = await api.get(`/journeys/${id}/plans`);
     return response.data;
   },
 
   selectPlan: async (journeyId: string, planId: string): Promise<JourneyPlan> => {
-    const response = await api.post<JourneyPlan>(`/journeys/${journeyId}/plans/${planId}/select`);
+    const response = await api.post(`/journeys/${journeyId}/plans/${planId}/select`);
     return response.data;
   },
 
@@ -177,10 +205,9 @@ export const journeyApi = {
     journeyId: string,
     targetArrivalTime: string
   ): Promise<DepartureSuggestion[]> => {
-    const response = await api.post<DepartureSuggestion[]>(
-      `/journeys/${journeyId}/departure-suggestions`,
-      { targetArrivalTime }
-    );
+    const response = await api.post(`/journeys/${journeyId}/departure-suggestions`, {
+      targetArrivalTime,
+    });
     return response.data;
   },
 
@@ -189,11 +216,17 @@ export const journeyApi = {
     request: ReplanRequest,
     confirm: boolean = false
   ): Promise<ReplanResponse> => {
-    const response = await api.post<ReplanResponse>(
-      `/journeys/${id}/replan?confirm=${confirm}`,
-      request
-    );
+    const response = await api.post(`/journeys/${id}/replan?confirm=${confirm}`, request);
     return response.data;
+  },
+
+  calculateRoute: async (params: CalculateRouteParams): Promise<CalculateRouteResult> => {
+    const response = await api.post('/routes/calculate', params);
+    return response.data;
+  },
+
+  deleteJourney: async (id: string): Promise<void> => {
+    await api.delete(`/journeys/${id}`);
   },
 };
 

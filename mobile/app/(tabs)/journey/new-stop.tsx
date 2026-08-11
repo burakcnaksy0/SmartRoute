@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,27 +6,31 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Switch,
   ActivityIndicator,
   Platform,
   Alert,
-  SafeAreaView,
-  StatusBar,
+  Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useJourneyStore } from '@/store/journeyStore';
 import StopList, { StopListItem } from '@/components/StopList';
-import { Colors, Spacing, Rounded } from '@/constants/theme';
+import { Colors, Spacing, Rounded, Shadow, Typography, TabBarHeight } from '@/constants/theme';
 import { ScreenHeader } from '@/components/ui/Header';
+import { Button } from '@/components/ui/Button';
 import { placesApi, PlaceResult } from '@/api/places';
+
+const C = Colors.light;
 
 export default function NewStopScreen() {
   const router = useRouter();
-  const colors = Colors.light;
   
   const {
     draftStops,
+    addDraftStop,
     deleteDraftStop,
     reorderDraftStops,
     clearDraftStops,
@@ -36,43 +40,49 @@ export default function NewStopScreen() {
     error,
   } = useJourneyStore();
 
-  // Local starting parameters
-  const [startAddress, setStartAddress] = useState('Kadıköy, İstanbul');
+  // Starting location states
+  const [startAddress, setStartAddress] = useState('Mevcut Konum (Kadıköy)');
   const [startLat, setStartLat] = useState(40.9909);
   const [startLng, setStartLng] = useState(29.0303);
+  const [isLocating, setIsLocating] = useState(false);
 
-  // Geocoding start location via a debounce effect
-  useEffect(() => {
-    if (!startAddress.trim() || startAddress === 'Kadıköy, İstanbul') {
-      return;
-    }
-
-    const delayDebounceFn = setTimeout(async () => {
-      try {
-        const results = await placesApi.search(startAddress);
-        if (results && results.length > 0) {
-          setStartLat(results[0].lat);
-          setStartLng(results[0].lng);
-        }
-      } catch (err) {
-        console.error('Start location geocoding error:', err);
-      }
-    }, 600);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [startAddress]);
-
-  const [depTime, setDepTime] = useState('09:00');
-  const [returnToStart, setReturnToStart] = useState(false);
-  const [profileType, setProfileType] = useState<'fast' | 'economic'>('fast');
-
+  // Search states
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [customPlaceName, setCustomPlaceName] = useState('');
 
-  // Debounced search for stops
+  // Request GPS Location
+  const requestGPSLocation = async () => {
+    setIsLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const { latitude, longitude } = location.coords;
+      setStartLat(latitude);
+      setStartLng(longitude);
+
+      const address = await placesApi.reverseGeocode(latitude, longitude);
+      if (address) {
+        setStartAddress(address);
+      }
+    } catch (err) {
+      console.warn('Error fetching GPS location:', err);
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  useEffect(() => {
+    requestGPSLocation();
+  }, []);
+
+  // Debounced search for places
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
@@ -80,20 +90,20 @@ export default function NewStopScreen() {
       return;
     }
 
-    const delayDebounceFn = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
         const results = await placesApi.search(searchQuery);
         setSearchResults(results);
         setShowSearchResults(true);
       } catch (err) {
-        console.error('Search error:', err);
+        console.warn('Search error:', err);
       } finally {
         setIsSearching(false);
       }
-    }, 450);
+    }, 400);
 
-    return () => clearTimeout(delayDebounceFn);
+    return () => clearTimeout(timer);
   }, [searchQuery]);
 
   const handleSelectPlace = (place: PlaceResult) => {
@@ -109,293 +119,287 @@ export default function NewStopScreen() {
     });
   };
 
-  const handleAddCustomPlace = () => {
-    if (!customPlaceName.trim()) return;
-    const mockLat = 40.9 + Math.random() * 0.2;
-    const mockLng = 29.0 + Math.random() * 0.3;
-
-    setCustomPlaceName('');
+  const handleQuickAdd = (name: string, lat: number, lng: number, type: string) => {
     router.push({
       pathname: '/(tabs)/journey/stop-detail' as any,
       params: {
-        placeName: customPlaceName.trim(),
-        lat: String(mockLat),
-        lng: String(mockLng),
+        placeName: name,
+        lat: String(lat),
+        lng: String(lng),
+        stopType: type,
       },
     });
   };
 
-  const handleBuildJourney = async () => {
+  const handleOptimizeAndBuild = async () => {
     if (draftStops.length === 0) {
-      Alert.alert('Hata', 'Lütfen rotanızı oluşturmak için en az bir durak ekleyin.');
+      Alert.alert('Durak Gerekli', 'Lütfen rotanızı oluşturmak için en az bir durak ekleyin.');
       return;
     }
 
     const today = new Date();
-    const [h, m] = depTime.split(':').map(Number);
-    today.setHours(h || 9, m || 0, 0, 0);
     const plannedDepartureTime = today.toISOString().slice(0, 19);
 
-    const requestBody = {
-      startLat,
-      startLng,
-      startAddressText: startAddress,
-      plannedDepartureTime,
-      stops: draftStops,
-    };
+    try {
+      const requestBody = {
+        startLat,
+        startLng,
+        startAddressText: startAddress,
+        plannedDepartureTime,
+        stops: draftStops,
+      };
 
-    const journey = await createJourney(requestBody);
-    if (journey) {
-      const success = await optimizeJourney(journey.id, {
-        returnToStart,
-        preferences: {
-          profileType,
-          avoidTolls: false,
-          avoidHighways: false,
-        },
-      });
+      const journey = await createJourney(requestBody);
+      if (journey) {
+        const success = await optimizeJourney(journey.id, {
+          returnToStart: false,
+          preferences: {
+            profileType: 'fast',
+            avoidTolls: false,
+            avoidHighways: false,
+          },
+        });
 
-      if (success) {
-        clearDraftStops();
-        router.replace('/(tabs)/journey/plan-result' as any);
+        if (success) {
+          clearDraftStops();
+          router.replace('/(tabs)/journey/plan-result' as any);
+        } else {
+          const err = useJourneyStore.getState().error || 'Rota optimizasyonu gerçekleştirilemedi.';
+          Alert.alert('Optimizasyon Uyarısı', err);
+        }
+      } else {
+        const err = useJourneyStore.getState().error || 'Yolculuk taslağı sunucuda oluşturulamadı.';
+        Alert.alert('Hata', err);
       }
+    } catch (e: any) {
+      Alert.alert('Bağlantı Hatası', e?.message || 'Sunucu ile iletişim kurulamadı.');
     }
   };
 
+  const recentSearches = [
+    { title: 'Bağdat Caddesi No: 240', subtitle: '15 dk · 6.2 km', lat: 40.965, lng: 29.071, icon: 'storefront' },
+    { title: 'Zorlu Center AVM', subtitle: '28 dk · 18.5 km', lat: 41.066, lng: 29.017, icon: 'shopping-bag' },
+    { title: 'Sabiha Gökçen Havalimanı', subtitle: '45 dk · 38 km', lat: 40.898, lng: 29.309, icon: 'flight' },
+  ];
+
+  const suggestedPlaces = [
+    { title: 'Starbucks Reserve', type: 'Kahve & Mola', lat: 40.978, lng: 29.034, icon: 'local-cafe' },
+    { title: 'Marmaray Ayrılık Çeşmesi', type: 'Toplu Taşıma', lat: 41.001, lng: 29.031, icon: 'train' },
+    { title: 'Fenerbahçe Parkı', type: 'Açık Alan', lat: 40.969, lng: 29.038, icon: 'park' },
+  ];
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <StatusBar style="dark" />
       <ScreenHeader
-        title="Manuel Planlayıcı"
+        title="Durak Ekle"
         rightComponent={
-          <TouchableOpacity
-            onPress={() => clearDraftStops()}
-            style={{ paddingHorizontal: 4 }}
-          >
-            <Text style={{ color: colors.error, fontSize: 14, fontWeight: '600' }}>Sıfırla</Text>
-          </TouchableOpacity>
+          draftStops.length > 0 ? (
+            <TouchableOpacity onPress={clearDraftStops} style={styles.clearBtn}>
+              <Text style={styles.clearBtnText}>Sıfırla</Text>
+            </TouchableOpacity>
+          ) : undefined
         }
       />
 
-      <ScrollView 
-        contentContainerStyle={styles.scroll} 
-        keyboardShouldPersistTaps="handled" 
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Card 1: Start Location Configuration */}
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Başlangıç Konumu</Text>
-          
-          <View style={[styles.inputContainer, { backgroundColor: colors.surfaceLow }]}>
-            <MaterialIcons name="my-location" size={18} color={colors.primary} style={styles.inputIcon} />
+        {/* Search Bar Input (Nereye?) */}
+        <View style={styles.searchCard}>
+          <View style={styles.searchRow}>
+            <MaterialIcons name="search" size={22} color={C.primary} />
             <TextInput
-              style={[styles.input, { color: colors.onSurface }]}
-              value={startAddress}
-              onChangeText={setStartAddress}
-              placeholder="Başlangıç adresini girin"
-              placeholderTextColor={colors.outline}
-            />
-          </View>
-
-          <View style={styles.formRow}>
-            <View style={styles.formCol}>
-              <Text style={[styles.inputLabel, { color: colors.outline }]}>Çıkış Saati</Text>
-              <View style={[styles.inputContainer, { backgroundColor: colors.surfaceLow }]}>
-                <MaterialIcons name="schedule" size={18} color={colors.outline} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { color: colors.onSurface }]}
-                  value={depTime}
-                  onChangeText={setDepTime}
-                  placeholder="09:00"
-                  maxLength={5}
-                />
-              </View>
-            </View>
-
-            <View style={styles.formCol}>
-              <Text style={[styles.inputLabel, { color: colors.outline }]}>Rota Modu</Text>
-              <View style={[styles.profileSelector, { backgroundColor: colors.surfaceLow }]}>
-                <TouchableOpacity
-                  style={[styles.profileBtn, profileType === 'fast' && [styles.profileBtnActive, { backgroundColor: colors.surface }]]}
-                  onPress={() => setProfileType('fast')}
-                >
-                  <Text style={[styles.profileBtnText, { color: colors.outline }, profileType === 'fast' && { color: colors.primary, fontWeight: '600' }]}>
-                    Hızlı
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.profileBtn, profileType === 'economic' && [styles.profileBtnActive, { backgroundColor: colors.surface }]]}
-                  onPress={() => setProfileType('economic')}
-                >
-                  <Text style={[styles.profileBtnText, { color: colors.outline }, profileType === 'economic' && { color: colors.primary, fontWeight: '600' }]}>
-                    Eko
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          <View style={[styles.switchRow, { borderTopColor: colors.surfaceContainer }]}>
-            <Text style={[styles.switchLabel, { color: colors.onSurface }]}>Başlangıç noktasına geri dön</Text>
-            <Switch
-              value={returnToStart}
-              onValueChange={setReturnToStart}
-              trackColor={{ false: colors.surfaceContainerHigh, true: colors.primary }}
-              thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
-            />
-          </View>
-        </View>
-
-        {/* Card 2: Stop Search Prediction */}
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Durak Ara & Ekle</Text>
-          
-          <View style={[styles.searchBar, { backgroundColor: colors.surfaceLow }]}>
-            <MaterialIcons name="search" size={20} color={colors.outline} style={styles.inputIcon} />
-            <TextInput
-              style={[styles.searchInput, { color: colors.onSurface }]}
+              style={styles.searchInput}
+              placeholder="Nereye gitmek istiyorsunuz?"
+              placeholderTextColor={C.outline}
               value={searchQuery}
               onChangeText={(text) => {
                 setSearchQuery(text);
                 setShowSearchResults(text.length > 0);
               }}
-              placeholder="Konum ara..."
-              placeholderTextColor={colors.outline}
+              autoFocus={draftStops.length === 0}
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => { setSearchQuery(''); setShowSearchResults(false); }}>
-                <MaterialIcons name="close" size={20} color={colors.outline} />
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchQuery('');
+                  setShowSearchResults(false);
+                }}
+              >
+                <MaterialIcons name="close" size={20} color={C.outline} />
               </TouchableOpacity>
             )}
           </View>
 
+          {/* Autocomplete Results Dropdown */}
           {showSearchResults && (
-            <View style={[styles.resultsList, { backgroundColor: colors.surfaceLow, borderColor: colors.surfaceContainer }]}>
+            <View style={styles.resultsBox}>
               {isSearching ? (
-                <View style={{ padding: 16, alignItems: 'center' }}>
-                  <ActivityIndicator size="small" color={colors.primary} />
+                <View style={styles.searchLoading}>
+                  <ActivityIndicator size="small" color={C.primary} />
+                  <Text style={styles.searchLoadingText}>Aranıyor...</Text>
                 </View>
-              ) : (
-                <>
-                  {searchResults.map((place, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={[styles.resultItem, { borderBottomColor: colors.surfaceContainer }]}
-                      onPress={() => handleSelectPlace(place)}
-                    >
-                      <MaterialIcons name="place" size={18} color={colors.primary} />
-                      <View style={{ marginLeft: 8, flex: 1 }}>
-                        <Text style={{ color: colors.onSurface, fontSize: 14, fontWeight: '500' }} numberOfLines={1}>
-                          {place.name}
+              ) : searchResults.length > 0 ? (
+                searchResults.map((place, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.resultRow}
+                    onPress={() => handleSelectPlace(place)}
+                  >
+                    <MaterialIcons name="place" size={20} color={C.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.resultTitle} numberOfLines={1}>
+                        {place.name}
+                      </Text>
+                      {place.vicinity && (
+                        <Text style={styles.resultSub} numberOfLines={1}>
+                          {place.vicinity}
                         </Text>
-                        {place.vicinity ? (
-                          <Text style={{ color: colors.outline, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
-                            {place.vicinity}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                  {searchResults.length === 0 && (
-                    <View style={styles.noResult}>
-                      <Text style={[styles.noResultText, { color: colors.outline }]}>Eşleşen konum bulunamadı.</Text>
+                      )}
                     </View>
-                  )}
-                </>
+                    <MaterialIcons name="add" size={20} color={C.outline} />
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.emptySearch}>
+                  <Text style={styles.emptySearchText}>Konum bulunamadı</Text>
+                </View>
               )}
             </View>
           )}
 
-          {/* Quick Custom Add Row */}
-          <View style={styles.customAddRow}>
-            <View style={[styles.inputContainer, { flex: 1, backgroundColor: colors.surfaceLow, marginBottom: 0 }]}>
-              <MaterialIcons name="add-location" size={18} color={colors.outline} style={styles.inputIcon} />
-              <TextInput
-                style={[styles.input, { color: colors.onSurface }]}
-                value={customPlaceName}
-                onChangeText={setCustomPlaceName}
-                placeholder="Veya özel konum adı yazın..."
-                placeholderTextColor={colors.outline}
-              />
-            </View>
-            <TouchableOpacity 
-              style={[styles.customAddButton, { backgroundColor: colors.primary }]} 
-              onPress={handleAddCustomPlace}
+          {/* Quick Shortcuts Chips (Mevcut, Ev, İş) */}
+          <View style={styles.shortcutsRow}>
+            <TouchableOpacity
+              style={styles.shortcutChip}
+              onPress={requestGPSLocation}
+              activeOpacity={0.7}
             >
-              <Text style={[styles.customAddButtonText, { color: colors.onPrimary }]}>Ekle</Text>
+              <MaterialIcons name="my-location" size={16} color={C.primary} />
+              <Text style={styles.shortcutText}>Mevcut</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shortcutChip}
+              onPress={() => handleQuickAdd('Ev', 40.985, 29.04, 'meeting')}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="home" size={16} color={C.secondary} />
+              <Text style={styles.shortcutText}>Ev</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shortcutChip}
+              onPress={() => handleQuickAdd('İş', 41.075, 29.01, 'meeting')}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="work" size={16} color={C.tertiary} />
+              <Text style={styles.shortcutText}>İş</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Backend Validation Errors */}
-        {error && (
-          <View style={[styles.errorBox, { backgroundColor: colors.errorContainer + '15', borderColor: colors.error }]}>
-            <MaterialIcons name="warning" size={18} color={colors.error} />
-            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+        {/* Selected Draft Stops List */}
+        {draftStops.length > 0 && (
+          <View style={styles.draftSection}>
+            <Text style={styles.sectionHeading}>
+              SEÇİLEN DURAKLAR ({draftStops.length})
+            </Text>
+            <StopList
+              stops={draftStops.map((s, idx) => ({
+                id: String(idx),
+                placeName: s.placeName,
+                visitDurationMinutes: s.visitDurationMinutes ?? 15,
+                priority: (s.priority as any) ?? 'normal',
+                stopType: s.stopType ?? 'errand',
+                timeWindowStart: s.timeWindowStart,
+                timeWindowEnd: s.timeWindowEnd,
+              }) as StopListItem)}
+              onReorder={(newOrder) => {
+                const mapped = newOrder.map(item => draftStops[parseInt(item.id!, 10)]);
+                reorderDraftStops(mapped);
+              }}
+              onEditStop={(idx) => router.push({
+                pathname: '/(tabs)/journey/stop-detail' as any,
+                params: { stopIndex: String(idx) },
+              })}
+              onDeleteStop={(idx) => deleteDraftStop(idx)}
+              isManualOverride={true}
+            />
           </View>
         )}
 
-        {/* Stops Itinerary Title */}
-        <Text style={[styles.sectionTitleLabel, { color: colors.outline }]}>
-          Taslak Duraklar ({draftStops.length})
-        </Text>
+        {/* Recent Searches (Son Aramalar) */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionHeading}>SON ARAMALAR</Text>
+          <View style={styles.itemList}>
+            {recentSearches.map((item, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={styles.itemCard}
+                activeOpacity={0.7}
+                onPress={() => handleQuickAdd(item.title, item.lat, item.lng, 'errand')}
+              >
+                <View style={styles.itemIconBg}>
+                  <MaterialIcons name={item.icon as any} size={18} color={C.textSecondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemTitle}>{item.title}</Text>
+                  <Text style={styles.itemSub}>{item.subtitle}</Text>
+                </View>
+                <MaterialIcons name="add-circle-outline" size={22} color={C.primary} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
-        {/* Reorderable Draft StopList */}
-        <StopList
-          stops={draftStops.map((s, idx) => ({
-            id: String(idx),
-            placeName: s.placeName,
-            visitDurationMinutes: s.visitDurationMinutes ?? 15,
-            priority: (s.priority as any) ?? 'normal',
-            stopType: s.stopType ?? 'errand',
-            timeWindowStart: s.timeWindowStart,
-            timeWindowEnd: s.timeWindowEnd,
-          }) as StopListItem)}
-          onReorder={(newOrder) => {
-            const mapped = newOrder.map(item => draftStops[parseInt(item.id!, 10)]);
-            reorderDraftStops(mapped);
-          }}
-          onEditStop={(idx) => router.push({
-            pathname: '/(tabs)/journey/stop-detail' as any,
-            params: { stopIndex: String(idx) },
-          })}
-          onDeleteStop={(idx) => {
-            deleteDraftStop(idx);
-          }}
-          isManualOverride={true}
-        />
+        {/* Suggested Places (Önerilenler) */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionHeading}>ÖNERİLENLER</Text>
+          <View style={styles.itemList}>
+            {suggestedPlaces.map((item, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={styles.itemCard}
+                activeOpacity={0.7}
+                onPress={() => handleQuickAdd(item.title, item.lat, item.lng, 'poi')}
+              >
+                <View style={[styles.itemIconBg, { backgroundColor: C.secondaryContainer }]}>
+                  <MaterialIcons name={item.icon as any} size={18} color={C.secondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemTitle}>{item.title}</Text>
+                  <Text style={styles.itemSub}>{item.type}</Text>
+                </View>
+                <MaterialIcons name="add-circle-outline" size={22} color={C.primary} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {error && (
+          <View style={styles.errorBox}>
+            <MaterialIcons name="error-outline" size={18} color={C.error} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
       </ScrollView>
 
-      {/* Sticky Bottom Actions */}
-      <View style={[styles.footer, { backgroundColor: 'rgba(255, 255, 255, 0.9)', borderTopColor: 'rgba(0, 0, 0, 0.04)' }]}>
-        {isLoading ? (
-          <View style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: 0.8 }]}>
-            <ActivityIndicator color={colors.onPrimary} size="small" />
-            <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]}>
-              Rota Hesaplanıyor...
-            </Text>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={[
-              styles.primaryBtn, 
-              { backgroundColor: colors.primary },
-              draftStops.length === 0 && { backgroundColor: colors.surfaceContainerHigh }
-            ]}
-            disabled={draftStops.length === 0}
-            onPress={handleBuildJourney}
-            activeOpacity={0.85}
-          >
-            <MaterialIcons name="auto-awesome" size={20} color={draftStops.length === 0 ? colors.outline : colors.onPrimary} />
-            <Text style={[
-              styles.primaryBtnText, 
-              { color: colors.onPrimary },
-              draftStops.length === 0 && { color: colors.outline }
-            ]}>
-              Optimize Et & Rotayı Çiz
-            </Text>
-          </TouchableOpacity>
-        )}
+      {/* Sticky Bottom Optimize Button */}
+      <View style={styles.footer}>
+        <Button
+          label={isLoading ? 'Optimize Ediliyor...' : `Rotayı Optimize Et (${draftStops.length} Durak)`}
+          variant="primary"
+          size="lg"
+          fullWidth
+          disabled={draftStops.length === 0}
+          loading={isLoading}
+          icon="auto-awesome"
+          onPress={handleOptimizeAndBuild}
+        />
       </View>
     </SafeAreaView>
   );
@@ -404,218 +408,170 @@ export default function NewStopScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    backgroundColor: C.background,
   },
-  header: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-  },
-  headerBtn: {
-    width: 60,
-    height: 44,
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: -0.4,
+  clearBtn: {
+    paddingHorizontal: Spacing.sm,
   },
   clearBtnText: {
-    fontSize: 14,
+    ...Typography.bodySmall,
+    color: C.error,
     fontWeight: '600',
   },
   scroll: {
-    padding: Spacing.marginMain,
-    paddingBottom: 120, // Cushion for sticky footer
-    gap: Spacing.stackMd,
+    padding: Spacing.gutter,
+    paddingBottom: Spacing.xl,
+    gap: Spacing.base,
   },
-  card: {
+  searchCard: {
+    backgroundColor: C.surface,
     borderRadius: Rounded.xl,
-    padding: 16,
-    gap: 12,
-    shadowColor: 'rgba(0, 0, 0, 0.02)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 1,
+    padding: Spacing.md,
+    gap: Spacing.md,
+    ...Shadow.md,
+    borderWidth: 1,
+    borderColor: C.outlineVariant,
   },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: -0.3,
-    marginBottom: 2,
-  },
-  inputContainer: {
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 46,
-    borderRadius: Rounded.xl,
-    paddingHorizontal: 12,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    height: '100%',
-    padding: 0,
-  },
-  formRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  formCol: {
-    flex: 1,
-    gap: 6,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 4,
-  },
-  profileSelector: {
-    flexDirection: 'row',
-    height: 46,
-    borderRadius: Rounded.xl,
-    padding: 3,
-  },
-  profileBtn: {
-    flex: 1,
+    backgroundColor: C.surfaceLow,
     borderRadius: Rounded.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileBtnActive: {
-    shadowColor: 'rgba(0, 0, 0, 0.05)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  profileBtnText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    paddingTop: 12,
-    marginTop: 4,
-  },
-  switchLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
     height: 48,
-    borderRadius: Rounded.xl,
-    paddingHorizontal: 12,
+    gap: Spacing.sm,
   },
   searchInput: {
+    ...Typography.bodyMedium,
+    color: C.text,
     flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    height: '100%',
     padding: 0,
   },
-  resultsList: {
-    borderRadius: Rounded.xl,
-    borderWidth: 1,
-    overflow: 'hidden',
-    marginTop: -4,
-  },
-  resultItem: {
+  shortcutsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderBottomWidth: 1,
+    gap: Spacing.sm,
   },
-  resultText: {
-    fontSize: 15,
-    fontWeight: '500',
+  shortcutChip: {
     flex: 1,
-  },
-  noResult: {
-    padding: 14,
-    alignItems: 'center',
-  },
-  noResultText: {
-    fontSize: 13,
-    fontStyle: 'italic',
-  },
-  customAddRow: {
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.surfaceLow,
+    borderRadius: Rounded.md,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  shortcutText: {
+    ...Typography.caption,
+    fontWeight: '600',
+    color: C.text,
+  },
+  resultsBox: {
+    backgroundColor: C.surface,
+    borderRadius: Rounded.lg,
+    borderWidth: 1,
+    borderColor: C.outlineVariant,
+    overflow: 'hidden',
+  },
+  searchLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.base,
+    gap: Spacing.sm,
+  },
+  searchLoadingText: {
+    ...Typography.caption,
+    color: C.textSecondary,
+  },
+  resultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.outlineVariant,
+  },
+  resultTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '600',
+    color: C.text,
+  },
+  resultSub: {
+    ...Typography.caption,
+    color: C.textSecondary,
+  },
+  emptySearch: {
+    padding: Spacing.base,
     alignItems: 'center',
   },
-  customAddButton: {
-    height: 46,
-    paddingHorizontal: 20,
+  emptySearchText: {
+    ...Typography.caption,
+    color: C.textSecondary,
+  },
+  draftSection: {
+    gap: Spacing.sm,
+  },
+  sectionBlock: {
+    gap: Spacing.sm,
+  },
+  sectionHeading: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: C.outline,
+    letterSpacing: 0.8,
+    paddingHorizontal: 4,
+  },
+  itemList: {
+    gap: Spacing.xs,
+  },
+  itemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.surface,
     borderRadius: Rounded.xl,
+    padding: Spacing.md,
+    gap: Spacing.md,
+    ...Shadow.sm,
+    borderWidth: 1,
+    borderColor: C.outlineVariant,
+  },
+  itemIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: C.surfaceLow,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  customAddButtonText: {
-    fontSize: 15,
+  itemTitle: {
+    ...Typography.bodyMedium,
     fontWeight: '600',
+    color: C.text,
+  },
+  itemSub: {
+    ...Typography.caption,
+    color: C.textSecondary,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: Rounded.xl,
-    borderWidth: 1,
+    backgroundColor: C.errorContainer,
+    borderRadius: Rounded.md,
+    padding: Spacing.md,
+    gap: Spacing.sm,
   },
   errorText: {
-    fontSize: 13,
-    fontWeight: '500',
+    ...Typography.bodySmall,
+    color: C.error,
     flex: 1,
   },
-  sectionTitleLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    paddingHorizontal: 4,
-    marginTop: Spacing.stackSm,
-  },
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: Spacing.marginMain,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
-    borderTopWidth: 1,
-  },
-  primaryBtn: {
-    height: 56,
-    borderRadius: Rounded.xl,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    shadowColor: 'rgba(42, 20, 180, 0.25)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  primaryBtnText: {
-    fontSize: 17,
-    fontWeight: '600',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.sm,
+    paddingBottom: Platform.OS === 'ios' ? Spacing.xs : Spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.outlineVariant,
   },
 });

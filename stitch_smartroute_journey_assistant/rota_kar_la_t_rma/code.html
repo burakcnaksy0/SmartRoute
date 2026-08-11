@@ -1,0 +1,122 @@
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;overflow-x:hidden;}body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"on-error-container":"#93000a","inverse-on-surface":"#ecf1ff","surface-container-highest":"#d8e3fb","tertiary-fixed-dim":"#ffb95f","surface-variant":"#d8e3fb","surface-bright":"#f9f9ff","primary":"#2a14b4","on-surface-variant":"#464554","primary-fixed-dim":"#c3c0ff","on-secondary-fixed":"#002113","tertiary":"#553300","on-primary-container":"#c1beff","on-tertiary-fixed":"#2a1700","surface-container":"#e7eeff","surface-container-low":"#f0f3ff","primary-fixed":"#e3dfff","tertiary-container":"#744800","secondary-fixed":"#6ffbbe","on-background":"#111c2d","on-tertiary-fixed":"#2a1700","on-secondary-fixed-variant":"#005236","on-primary":"#ffffff","outline":"#777586","secondary-fixed-dim":"#4edea3","error":"#ba1a1a","on-error":"#ffffff","on-secondary":"#ffffff","surface-tint":"#5148d7","on-primary-fixed-variant":"#372abf","surface":"#f9f9ff","tertiary-fixed":"#ffddb8","on-secondary-container":"#00714d","inverse-primary":"#c3c0ff","inverse-surface":"#263143","error-container":"#ffdad6","on-tertiary":"#ffffff","primary-container":"#4338ca","surface-dim":"#cfdaf2","secondary-container":"#6cf8bb","outline-variant":"#c7c4d7","surface-container-high":"#dee8ff","background":"#f9f9ff","secondary":"#006c49","on-tertiary-fixed-variant":"#653e00","on-surface":"#111c2d","on-primary-fixed":"#100069","surface-container-lowest":"#ffffff"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"stack-sm":"0.5rem","stack-lg":"1.5rem","touch-target-min":"44px","margin-main":"1.25rem","stack-md":"1rem","gutter":"1rem"},"fontFamily":{"label-sm":["Inter"],"display":["Inter"],"headline-md":["Inter"],"headline-lg":["Inter"],"body-md":["Inter"],"body-lg":["Inter"],"headline-lg-mobile":["Inter"]},"fontSize":{"label-sm":["13px",{"lineHeight":"18px","letterSpacing":"0px","fontWeight":"500"}],"display":["34px",{"lineHeight":"41px","letterSpacing":"-0.4px","fontWeight":"700"}],"headline-md":["22px",{"lineHeight":"28px","letterSpacing":"-0.4px","fontWeight":"600"}],"headline-lg":["28px",{"lineHeight":"34px","letterSpacing":"-0.4px","fontWeight":"700"}],"body-md":["15px",{"lineHeight":"20px","letterSpacing":"-0.2px","fontWeight":"400"}],"body-lg":["17px",{"lineHeight":"22px","letterSpacing":"-0.4px","fontWeight":"400"}],"headline-lg-mobile":["24px",{"lineHeight":"30px","letterSpacing":"-0.4px","fontWeight":"700"}]}}}}</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head><body class="bg-background font-body-lg text-on-surface"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 px-margin-main flex items-center"><button class="w-[touch-target-min] h-[touch-target-min] flex items-center justify-start text-primary" onclick="history.back()"><span class="material-symbols-outlined text-[28px]">chevron_left</span></button><div class="flex-1 text-center pr-[touch-target-min]"><span class="font-headline-md text-headline-md text-on-surface">Rota Detayları</span></div></div></header><main class="relative w-full pt-16 bg-background min-h-screen"><div class="px-margin-main pt-stack-lg"><div class="flex flex-col w-full px-4 pt-4 pb-20 gap-6">
+<!-- Header Summary -->
+<div class="flex flex-col gap-2">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Rotaları Karşılaştır</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Hız ve konfor arasındaki en iyi dengeyi seçin.</p>
+</div>
+<!-- Comparison Cards Container -->
+<div class="grid grid-cols-2 gap-4">
+<!-- Route 1: Fastest -->
+<button class="relative flex flex-col bg-surface-container rounded-2xl overflow-hidden shadow-sm transition-transform active:scale-[0.98] text-left group">
+<!-- Selected State Overlay -->
+<div class="absolute inset-0 bg-primary/5 opacity-100 transition-opacity"></div>
+<div class="absolute top-3 right-3 w-6 h-6 rounded-full bg-primary flex items-center justify-center text-on-primary shadow-sm z-10">
+<span class="material-symbols-outlined text-[16px]">check</span>
+</div>
+<!-- Map Snapshot -->
+<div class="h-24 w-full bg-surface-container-high relative">
+<div class="w-full h-full bg-cover bg-center" data-location="Downtown Express Route, City Center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuC8j9JLuzT2iOLr0Qp_GKTBuAg51sfiTUAmtDb0lOraiOlheK-aTyyfe1_J36zVmyD0lorGIzrQGOArO1Ih3f4i_nG7gBITXIDnjqc7VVPkG83WJdnp1PGlPmKYKdET5st6SI3EWNuobz5sfkuLZc1Hpw_Q-OuhxHMkqRanltMENLiR2JzITOmJukUwcEh8EbKtXVy-Iz431B6SnGT14943ezu6bvaRLUJDZt0t2JGrlm2CN9iKgdxhSA')"></div>
+<div class="absolute bottom-2 left-2 bg-background/90 backdrop-blur-sm px-2 py-1 rounded-md">
+<span class="font-label-sm text-label-sm text-on-surface">Rota A</span>
+</div>
+</div>
+<!-- Content -->
+<div class="p-4 flex flex-col gap-4 relative z-10">
+<div class="flex justify-between items-start">
+<div class="flex flex-col">
+<span class="font-display text-[24px] font-bold text-primary">24m</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">En Hızlı</span>
+</div>
+</div>
+<!-- Metrics -->
+<div class="flex flex-col gap-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-[18px]">payments</span>
+<span class="font-body-md text-body-md text-on-surface">$4.50</span>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">psychology</span> Stres</span>
+<span class="font-label-sm text-label-sm text-error">Yüksek</span>
+</div>
+<div class="w-full h-1.5 bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-error w-[80%] rounded-full"></div>
+</div>
+</div>
+</div>
+<!-- Transit Steps -->
+<div class="flex items-center gap-1 mt-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">directions_subway</span>
+<span class="text-[12px] opacity-50 material-symbols-outlined">chevron_right</span>
+<span class="material-symbols-outlined text-[16px]">directions_walk</span>
+</div>
+</div>
+</button>
+<!-- Route 2: Low Stress -->
+<button class="relative flex flex-col bg-surface rounded-2xl overflow-hidden shadow-sm transition-transform active:scale-[0.98] text-left group">
+<!-- Map Snapshot -->
+<div class="h-24 w-full bg-surface-container-high relative">
+<div class="w-full h-full bg-cover bg-center" data-location="Scenic Park Route, City Center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuC-PLDjTeM7JR9_PLfchVeIal5KxVHeX9RmRrdqVIjnXfaRGy3eGFsg0MDVsGuqVVimWDepwpxZplft7TR-mj5UiPuQVGs8viOMu6FLnVM5ixst3I3bMPaGdfoh8zUf1yyHLihr6-3Wyyqjh8Pg7u6CtT7LFhe6mVpYrDNJiO_q3H8_GaHZtner1uXBoxqD3GoKthAuC8V3h86tUgW1AxjiL8Kj-CCRKta0bhcaK4JoHW-YyHCfb1vFkg')"></div>
+<div class="absolute bottom-2 left-2 bg-background/90 backdrop-blur-sm px-2 py-1 rounded-md">
+<span class="font-label-sm text-label-sm text-on-surface">Rota B</span>
+</div>
+</div>
+<!-- Content -->
+<div class="p-4 flex flex-col gap-4">
+<div class="flex justify-between items-start">
+<div class="flex flex-col">
+<span class="font-display text-[24px] font-bold text-on-surface">36m</span>
+<span class="font-label-sm text-label-sm text-secondary">Düşük Stres</span>
+</div>
+</div>
+<!-- Metrics -->
+<div class="flex flex-col gap-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-[18px]">payments</span>
+<span class="font-body-md text-body-md text-on-surface">$2.75</span>
+<span class="text-[12px] font-medium text-secondary bg-secondary/10 px-1.5 py-0.5 rounded-sm ml-auto">-38%</span>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">psychology</span> Stres</span>
+<span class="font-label-sm text-label-sm text-secondary">Düşük</span>
+</div>
+<div class="w-full h-1.5 bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[20%] rounded-full"></div>
+</div>
+</div>
+</div>
+<!-- Transit Steps -->
+<div class="flex items-center gap-1 mt-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">directions_bus</span>
+<span class="text-[12px] opacity-50 material-symbols-outlined">chevron_right</span>
+<span class="material-symbols-outlined text-[16px]">directions_walk</span>
+</div>
+</div>
+</button>
+</div>
+<!-- Trade-off Summary -->
+<div class="bg-primary/5 rounded-2xl p-5 flex gap-4 items-start">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary">balance</span>
+</div>
+<div class="flex flex-col gap-1">
+<h3 class="font-headline-md text-[18px] text-on-surface">Değerlendirme</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">
+                Rota A <strong class="text-on-surface font-semibold">12 dakika daha hızlıdır</strong>, ancak Rota B size <strong class="text-on-surface font-semibold">1,75$</strong> tasarruf sağlar ve kalabalık metro aktarmasından kaçınır.
+            </p>
+</div>
+</div>
+<!-- Bottom Action -->
+<div class="fixed bottom-0 left-0 w-full p-4 bg-background/90 backdrop-blur-xl pb-safe">
+<button class="w-full h-14 bg-primary text-on-primary rounded-2xl font-headline-md text-headline-md shadow-md active:scale-[0.98] transition-transform">
+            Navigasyonu Başlat
+        </button>
+</div>
+</div></div></main></body></html>

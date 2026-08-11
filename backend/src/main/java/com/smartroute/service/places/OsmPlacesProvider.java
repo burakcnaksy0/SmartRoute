@@ -70,7 +70,7 @@ public class OsmPlacesProvider {
         try {
             URI uri = UriComponentsBuilder.fromHttpUrl(overpassUrl)
                     .queryParam("data", overpassQuery)
-                    .build(true)
+                    .build()
                     .toUri();
 
             String responseBody = restClient.get()
@@ -132,7 +132,7 @@ public class OsmPlacesProvider {
                     .queryParam("format", "json")
                     .queryParam("limit", "10")
                     .queryParam("addressdetails", "1")
-                    .build(true)
+                    .build()
                     .toUri();
 
             String responseBody = restClient.get()
@@ -172,7 +172,7 @@ public class OsmPlacesProvider {
                     .queryParam("lat", lat)
                     .queryParam("lon", lng)
                     .queryParam("format", "json")
-                    .build(true)
+                    .build()
                     .toUri();
 
             String responseBody = restClient.get()
@@ -203,7 +203,7 @@ public class OsmPlacesProvider {
                     .queryParam("q", address)
                     .queryParam("format", "json")
                     .queryParam("limit", "1")
-                    .build(true)
+                    .build()
                     .toUri();
 
             String responseBody = restClient.get()

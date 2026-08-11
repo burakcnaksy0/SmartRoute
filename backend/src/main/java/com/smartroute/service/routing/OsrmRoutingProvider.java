@@ -23,6 +23,7 @@ import java.util.List;
  * For production, self-host via Docker: docker run -t -i -p 5000:5000 osrm/osrm-backend
  */
 @Service
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "providers.routing", havingValue = "osrm", matchIfMissing = true)
 public class OsrmRoutingProvider implements RoutingProvider {
 
     private static final Logger log = LoggerFactory.getLogger(OsrmRoutingProvider.class);

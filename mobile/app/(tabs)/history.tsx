@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,6 +7,8 @@ import {
   Animated,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -42,26 +44,42 @@ function statusLabel(status: string): { label: string; color: string } {
   }
 }
 
-function JourneyCard({ journey }: { journey: Journey }) {
-  const router = useRouter();
+function JourneyCard({
+  journey,
+  onDelete,
+  isDeleting,
+}: {
+  journey: Journey;
+  onDelete: (id: string, name?: string) => void;
+  isDeleting: boolean;
+}) {
   const { label, color } = statusLabel(journey.status);
   const selectedPlan = journey.plans?.find(p => p.isSelected) ?? journey.plans?.[0];
   const distMeters = selectedPlan?.totalDistanceMeters;
 
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => {
-        // Future: open journey detail screen
-      }}
-      activeOpacity={0.85}
-    >
+    <View style={styles.card}>
       <View style={styles.cardTop}>
         <View style={styles.cardLeft}>
           <View style={[styles.statusDot, { backgroundColor: color }]} />
           <Text style={styles.cardStatus}>{label}</Text>
+          <Text style={styles.dotSeparator}>•</Text>
+          <Text style={styles.cardDate}>{formatDate(journey.createdAt)}</Text>
         </View>
-        <Text style={styles.cardDate}>{formatDate(journey.createdAt)}</Text>
+
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => onDelete(journey.id, journey.startAddressText)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          disabled={isDeleting}
+          activeOpacity={0.7}
+        >
+          {isDeleting ? (
+            <ActivityIndicator size="small" color={C.error} />
+          ) : (
+            <MaterialIcons name="delete-outline" size={20} color={C.error} />
+          )}
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.cardTitle} numberOfLines={1}>
@@ -70,28 +88,32 @@ function JourneyCard({ journey }: { journey: Journey }) {
 
       <View style={styles.cardMeta}>
         <View style={styles.metaChip}>
-          <MaterialIcons name="place" size={13} color={C.outline} />
+          <MaterialIcons name="place" size={14} color={C.outline} />
           <Text style={styles.metaText}>{journey.stops?.length ?? 0} durak</Text>
         </View>
         {distMeters != null && (
           <View style={styles.metaChip}>
-            <MaterialIcons name="straighten" size={13} color={C.outline} />
+            <MaterialIcons name="straighten" size={14} color={C.outline} />
             <Text style={styles.metaText}>{formatDist(distMeters)}</Text>
           </View>
         )}
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
 export default function HistoryScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [refreshing, setRefreshing] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const {
     historyJourneys,
     statistics,
     isHistoryLoading,
     fetchHistoryJourneys,
     fetchStatistics,
+    deleteJourney,
   } = useJourneyStore();
 
   useEffect(() => {
@@ -99,6 +121,36 @@ export default function HistoryScreen() {
     fetchHistoryJourneys();
     fetchStatistics();
   }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchHistoryJourneys(), fetchStatistics()]);
+    setRefreshing(false);
+  };
+
+  const handleDeleteJourney = (id: string, name?: string) => {
+    Alert.alert(
+      'Yolculuğu Sil',
+      name
+        ? `"${name}" konumlu geçmiş yolculuğu silmek istediğinize emin misiniz?`
+        : 'Bu geçmiş yolculuk kaydını silmek istediğinize emin misiniz?',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Sil',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingId(id);
+            const success = await deleteJourney(id);
+            setDeletingId(null);
+            if (!success) {
+              Alert.alert('Hata', 'Yolculuk kaydı silinemedi. Lütfen tekrar deneyin.');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const totalDistKm = statistics?.totalDistanceKm ?? 0;
   const totalSavings = statistics?.totalSavingsEur ?? 0;
@@ -117,6 +169,14 @@ export default function HistoryScreen() {
         <ScrollView
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={C.primary}
+              colors={[C.primary]}
+            />
+          }
         >
           {/* Stats row */}
           <View style={styles.statsRow}>
@@ -144,10 +204,15 @@ export default function HistoryScreen() {
           </View>
 
           {/* Section label */}
-          <Text style={styles.sectionLabel}>Geçmiş Yolculuklar</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionLabel}>Geçmiş Yolculuklar</Text>
+            {historyJourneys.length > 0 && (
+              <Text style={styles.countBadge}>{historyJourneys.length} Kayıt</Text>
+            )}
+          </View>
 
           {/* Loading */}
-          {isHistoryLoading && (
+          {isHistoryLoading && !refreshing && (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={C.primary} />
               <Text style={styles.loadingText}>Yükleniyor...</Text>
@@ -164,8 +229,13 @@ export default function HistoryScreen() {
             />
           )}
 
-          {historyJourneys.map(journey => (
-            <JourneyCard key={journey.id} journey={journey} />
+          {historyJourneys.map((journey) => (
+            <JourneyCard
+              key={journey.id}
+              journey={journey}
+              onDelete={handleDeleteJourney}
+              isDeleting={deletingId === journey.id}
+            />
           ))}
         </ScrollView>
       </Animated.View>
@@ -224,11 +294,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   // Section label
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginBottom: -Spacing.md,
+  },
   sectionLabel: {
     ...Typography.labelCaps,
     color: C.outline,
-    paddingHorizontal: 4,
-    marginBottom: -Spacing.md,
+  },
+  countBadge: {
+    ...Typography.caption,
+    fontWeight: '600',
+    color: C.primary,
+    backgroundColor: C.primaryContainer ?? '#EBF2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Rounded.full,
   },
   // Loading
   loadingRow: {
@@ -275,9 +359,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: C.textSecondary,
   },
+  dotSeparator: {
+    ...Typography.caption,
+    color: C.outlineVariant,
+  },
   cardDate: {
     ...Typography.caption,
     color: C.outline,
+  },
+  deleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEE8E8',
   },
   cardTitle: {
     ...Typography.bodyMedium,

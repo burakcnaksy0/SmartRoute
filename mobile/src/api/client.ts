@@ -2,14 +2,32 @@ import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 import Constants from 'expo-constants';
 
-let baseUrl = 'http://localhost:8082/api/v1';
+import { Platform } from 'react-native';
 
-if (process.env.EXPO_PUBLIC_API_URL) {
-  baseUrl = process.env.EXPO_PUBLIC_API_URL;
-} else if (__DEV__ && Constants.expoConfig?.hostUri) {
-  const host = Constants.expoConfig.hostUri.split(':').shift();
-  baseUrl = `http://${host}:8082/api/v1`;
-}
+const getBaseUrl = (): string => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
+  // If running in Expo development, dynamically use Metro host IP
+  const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost || (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
+  if (__DEV__ && hostUri) {
+    const host = hostUri.split(':').shift();
+    if (host) {
+      return `http://${host}:8082/api/v1`;
+    }
+  }
+
+  // Android emulator fallback
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8082/api/v1';
+  }
+
+  // iOS Simulator / Web fallback
+  return 'http://localhost:8082/api/v1';
+};
+
+const baseUrl = getBaseUrl();
 
 export const api = axios.create({
   baseURL: baseUrl,

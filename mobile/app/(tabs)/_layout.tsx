@@ -1,4 +1,4 @@
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs, useRouter, useSegments } from 'expo-router';
 import { Colors, Rounded, Shadow, Spacing, TabBarHeight, Typography } from '@/constants/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
@@ -16,7 +16,11 @@ const C = Colors.light;
 
 export default function TabLayout() {
   const router = useRouter();
+  const segments = useSegments();
   const { currentJourney, completedStopIds } = useJourneyStore();
+
+  // Hide tab bar when user navigates into any sub-screen (e.g. /journey/preferences, /journey/new-stop, etc.)
+  const isSubScreen = segments.length > 2;
 
   const isActive = currentJourney && currentJourney.status === 'active';
   const stopsSorted = [...(currentJourney?.stops ?? [])].sort(
@@ -29,7 +33,7 @@ export default function TabLayout() {
   const stripScale = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
-    if (isActive && nextStop) {
+    if (isActive && nextStop && !isSubScreen) {
       Animated.parallel([
         Animated.spring(stripAnim, { toValue: 1, useNativeDriver: true, damping: 16, stiffness: 120 }),
         Animated.spring(stripScale, { toValue: 1, useNativeDriver: true, damping: 16, stiffness: 120 }),
@@ -37,7 +41,7 @@ export default function TabLayout() {
     } else {
       Animated.timing(stripAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
     }
-  }, [isActive, nextStop?.id]);
+  }, [isActive, nextStop?.id, isSubScreen]);
 
   const stripBottom = Platform.OS === 'ios' ? 98 : 78;
 
@@ -53,23 +57,25 @@ export default function TabLayout() {
             fontWeight: '600',
             marginTop: -2,
           },
-          tabBarStyle: {
-            backgroundColor: 'rgba(255, 255, 255, 0.96)',
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderTopColor: C.outlineVariant,
-            elevation: 0,
-            shadowColor: '#0F1523',
-            shadowOffset: { width: 0, height: -1 },
-            shadowOpacity: 0.06,
-            shadowRadius: 8,
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: TabBarHeight,
-            paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-            paddingTop: 8,
-          },
+          tabBarStyle: isSubScreen
+            ? { display: 'none' }
+            : {
+                backgroundColor: 'rgba(255, 255, 255, 0.96)',
+                borderTopWidth: StyleSheet.hairlineWidth,
+                borderTopColor: C.outlineVariant,
+                elevation: 0,
+                shadowColor: '#0F1523',
+                shadowOffset: { width: 0, height: -1 },
+                shadowOpacity: 0.06,
+                shadowRadius: 8,
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: TabBarHeight,
+                paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+                paddingTop: 8,
+              },
           tabBarIconStyle: {
             marginTop: 2,
           },
@@ -113,8 +119,8 @@ export default function TabLayout() {
         />
       </Tabs>
  
-      {/* Active journey floating strip */}
-      {isActive && nextStop && (
+      {/* Active journey floating strip - only on root tab screens */}
+      {isActive && nextStop && !isSubScreen && (
         <Animated.View
           style={[
             styles.stripWrapper,

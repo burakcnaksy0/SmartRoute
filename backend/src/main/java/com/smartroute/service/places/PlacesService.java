@@ -10,6 +10,7 @@ import com.smartroute.dto.ParkingOptionResponse;
 import com.smartroute.repository.JourneyRepository;
 import com.smartroute.repository.JourneyStopRepository;
 import org.springframework.stereotype.Service;
+import com.smartroute.service.routing.GeoPoint;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -22,13 +23,19 @@ public class PlacesService {
     private final JourneyRepository journeyRepository;
     private final JourneyStopRepository journeyStopRepository;
     private final OsmPlacesProvider osmPlacesProvider;
+    private final GeocodingProvider geocodingProvider;
+    private final ParkingProvider parkingProvider;
 
     public PlacesService(JourneyRepository journeyRepository,
                          JourneyStopRepository journeyStopRepository,
-                         OsmPlacesProvider osmPlacesProvider) {
+                         OsmPlacesProvider osmPlacesProvider,
+                         GeocodingProvider geocodingProvider,
+                         ParkingProvider parkingProvider) {
         this.journeyRepository = journeyRepository;
         this.journeyStopRepository = journeyStopRepository;
         this.osmPlacesProvider = osmPlacesProvider;
+        this.geocodingProvider = geocodingProvider;
+        this.parkingProvider = parkingProvider;
     }
 
     public List<AlongRoutePoiResponse> getAlongRoutePoi(UUID journeyId, String category, Double maxDetourMinutes, Double maxDetourKm, User user) {
@@ -140,14 +147,14 @@ public class PlacesService {
             throw new RuntimeException("Unauthorized access to journey stop");
         }
 
-        List<GooglePlaceResult> parkingLots = osmPlacesProvider.searchNearby(stop.getLat(), stop.getLng(), 800, "parking");
+        List<ParkingResult> parkingLots = parkingProvider.findNearby(new GeoPoint(stop.getLat(), stop.getLng()), 800);
 
         // Calculate planned arrival time (ETA) of this stop in the active/selected plan
         LocalDateTime routeArrivalTime = calculateStopRouteArrivalTime(stop);
 
         List<ParkingOptionResponse> options = new ArrayList<>();
-        for (GooglePlaceResult lot : parkingLots) {
-            double distance = haversineDistance(stop.getLat(), stop.getLng(), lot.getLat(), lot.getLng());
+        for (ParkingResult lot : parkingLots) {
+            double distance = lot.getDistanceMeters() != null ? lot.getDistanceMeters() : haversineDistance(stop.getLat(), stop.getLng(), lot.getLatitude(), lot.getLongitude());
             
             // Limit otopark search to 300-800m çevresi (or keep all up to 800m but display walking info)
             // Let's filter to keep ones within 800m
@@ -155,7 +162,7 @@ public class PlacesService {
                 double walkTimeMinutes = distance / (1.4 * 60.0); // 1.4 m/s walking speed
                 
                 // Mocks or simple deterministic formula based on rating & hash of placeId
-                double occupancyRate = 0.3 + (Math.abs(lot.getPlaceId().hashCode()) % 60) / 100.0;
+                double occupancyRate = 0.3 + (Math.abs(lot.getId().hashCode()) % 60) / 100.0;
                 double parkingSearchTimeMinutes = 2.0 + (occupancyRate * 5.0); // 2 to 7 minutes search time
                 
                 LocalDateTime effectiveArrival = routeArrivalTime
@@ -163,20 +170,20 @@ public class PlacesService {
                         .plusSeconds((long) (walkTimeMinutes * 60));
 
                 ParkingOptionResponse option = new ParkingOptionResponse();
-                option.setPlaceId(lot.getPlaceId());
+                option.setPlaceId(lot.getId());
                 option.setName(lot.getName());
-                option.setAddress(lot.getVicinity());
-                option.setLat(lot.getLat());
-                option.setLng(lot.getLng());
+                option.setAddress(lot.getAccess() != null ? "Access: " + lot.getAccess() : "OSM Parking");
+                option.setLat(lot.getLatitude());
+                option.setLng(lot.getLongitude());
                 option.setDistanceMeters((int) distance);
                 option.setWalkTimeMinutes(walkTimeMinutes);
                 option.setParkingSearchTimeEstimateMinutes(parkingSearchTimeMinutes);
                 option.setEffectiveArrivalTime(effectiveArrival);
                 option.setOccupancyRate(occupancyRate);
                 
-                boolean isFree = lot.getName().toLowerCase().contains("free") || (Math.abs(lot.getPlaceId().hashCode()) % 5 == 0);
+                boolean isFree = lot.getFee() != null ? !lot.getFee() : (lot.getName().toLowerCase().contains("free") || (Math.abs(lot.getId().hashCode()) % 5 == 0));
                 option.setPaymentType(isFree ? "free" : "paid");
-                option.setCostEstimate(isFree ? BigDecimal.ZERO : BigDecimal.valueOf(5.0 + (Math.abs(lot.getPlaceId().hashCode()) % 15)));
+                option.setCostEstimate(isFree ? BigDecimal.ZERO : BigDecimal.valueOf(5.0 + (Math.abs(lot.getId().hashCode()) % 15)));
 
                 options.add(option);
             }
@@ -280,10 +287,24 @@ public class PlacesService {
         if (query == null || query.trim().isEmpty()) {
             return Collections.emptyList();
         }
-        return osmPlacesProvider.textSearch(query);
+        List<LocationResult> locations = geocodingProvider.search(query);
+        List<GooglePlaceResult> results = new ArrayList<>();
+        for (LocationResult loc : locations) {
+            GooglePlaceResult item = new GooglePlaceResult();
+            item.setPlaceId("geoapify:" + loc.getLatitude() + "," + loc.getLongitude());
+            item.setName(loc.getName());
+            item.setVicinity(loc.getFormattedAddress());
+            item.setLat(loc.getLatitude());
+            item.setLng(loc.getLongitude());
+            item.setRating(0.0);
+            item.setUserRatingsTotal(0);
+            results.add(item);
+        }
+        return results;
     }
 
     public String reverseGeocode(double lat, double lng) {
-        return osmPlacesProvider.reverseGeocode(lat, lng);
+        LocationResult loc = geocodingProvider.reverseGeocode(lat, lng);
+        return loc != null ? loc.getFormattedAddress() : "Unknown Location";
     }
 }

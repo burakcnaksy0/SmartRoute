@@ -37,6 +37,7 @@ public class OptimizeRequest {
         private String profileType; // 'fast', 'economic', 'stress_free', 'comfortable', 'eco', 'balanced'
         private boolean avoidTolls;
         private boolean avoidHighways;
+        private boolean preserveStopOrder;
 
         public PreferencesDto() {}
 
@@ -62,6 +63,14 @@ public class OptimizeRequest {
 
         public void setAvoidHighways(boolean avoidHighways) {
             this.avoidHighways = avoidHighways;
+        }
+
+        public boolean isPreserveStopOrder() {
+            return preserveStopOrder;
+        }
+
+        public void setPreserveStopOrder(boolean preserveStopOrder) {
+            this.preserveStopOrder = preserveStopOrder;
         }
     }
 
