@@ -17,6 +17,7 @@ import MapView, { Marker, Circle, PROVIDER_DEFAULT } from 'react-native-maps';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Rounded, Shadow, Spacing, Typography } from '@/constants/theme';
 import { placesApi, PlaceResult } from '@/api/places';
+import { useSavedLocationStore } from '../store/savedLocationStore';
 
 const C = Colors.light;
 
@@ -290,6 +291,23 @@ export default function MapLocationPickerModal({
     });
     setCustomName('');
     onClose();
+  };
+
+  const handleSaveToFavorites = async () => {
+    const finalPlaceName = customName.trim() || selectedPlaceName || 'Seçilen Konum';
+    const address = selectedAddress || `${selectedCoords.latitude.toFixed(4)}, ${selectedCoords.longitude.toFixed(4)}`;
+    const success = await useSavedLocationStore.getState().saveLocation(
+      finalPlaceName,
+      selectedCoords.latitude,
+      selectedCoords.longitude,
+      address,
+      'favorite'
+    );
+    if (success) {
+      alert('Konum kaydedildi!');
+    } else {
+      alert('Kaydedilemedi: ' + useSavedLocationStore.getState().error);
+    }
   };
 
   const getMarkerColor = () => {
@@ -574,14 +592,24 @@ export default function MapLocationPickerModal({
             />
           </View>
 
-          <TouchableOpacity
-            style={[styles.confirmBtn, { backgroundColor: getMarkerColor() }]}
-            activeOpacity={0.85}
-            onPress={handleConfirm}
-          >
-            <MaterialIcons name="check-circle" size={20} color="#FFFFFF" />
-            <Text style={styles.confirmBtnText}>{actionButtonLabel}</Text>
-          </TouchableOpacity>
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              style={styles.favoriteBtn}
+              activeOpacity={0.7}
+              onPress={handleSaveToFavorites}
+            >
+              <MaterialIcons name="bookmark-border" size={24} color={getMarkerColor()} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.confirmBtn, { backgroundColor: getMarkerColor() }]}
+              activeOpacity={0.85}
+              onPress={handleConfirm}
+            >
+              <MaterialIcons name="check-circle" size={20} color="#FFFFFF" />
+              <Text style={styles.confirmBtnText}>{actionButtonLabel}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     </Modal>
@@ -926,5 +954,20 @@ const styles = StyleSheet.create({
     ...Typography.bodySmall,
     color: C.text,
     padding: 0,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  favoriteBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: Rounded.xl,
+    backgroundColor: C.surfaceLow,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: C.outlineVariant,
   },
 });

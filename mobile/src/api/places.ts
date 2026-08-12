@@ -62,34 +62,34 @@ export const placesApi = {
     }
   },
 
-  getNearbyParking: async (lat: number, lng: number, radius: number = 2000): Promise<NearbyParkingResult[]> => {
-    try {
-      const response = await api.get('/parking/nearby', {
-        params: { latitude: lat, longitude: lng, radius },
-      });
-      const data = response.data;
-      if (!Array.isArray(data)) return [];
-
-      return data.map((p: any) => {
-        const distM = p.distanceMeters ?? 0;
-        const walkMin = Math.max(1, Math.round(distM / (1.4 * 60))); // 1.4 m/s walking speed
-        return {
-          id: p.id || `parking_${p.latitude}_${p.longitude}`,
-          placeName: p.name || 'Otopark',
-          lat: p.latitude,
-          lng: p.longitude,
-          distanceMeters: distM,
-          walkTimeMinutes: walkMin,
-          capacity: p.capacity,
-          fee: p.fee ?? false,
-          access: p.access,
-        };
-      });
-    } catch (err) {
-      console.warn('placesApi.getNearbyParking error:', err);
-      return [];
-    }
-  },
+//   getNearbyParking: async (lat: number, lng: number, radius: number = 2000): Promise<NearbyParkingResult[]> => {
+//     try {
+//       const response = await api.get('/parking/nearby', {
+//         params: { latitude: lat, longitude: lng, radius },
+//       });
+//       const data = response.data;
+//       if (!Array.isArray(data)) return [];
+// 
+//       return data.map((p: any) => {
+//         const distM = p.distanceMeters ?? 0;
+//         const walkMin = Math.max(1, Math.round(distM / (1.4 * 60))); // 1.4 m/s walking speed
+//         return {
+//           id: p.id || `parking_${p.latitude}_${p.longitude}`,
+//           placeName: p.name || 'Otopark',
+//           lat: p.latitude,
+//           lng: p.longitude,
+//           distanceMeters: distM,
+//           walkTimeMinutes: walkMin,
+//           capacity: p.capacity,
+//           fee: p.fee ?? false,
+//           access: p.access,
+//         };
+//       });
+//     } catch (err) {
+//       console.warn('placesApi.getNearbyParking error:', err);
+//       return [];
+//     }
+//   },
 
   getRecommendations: async (lat: number, lng: number, radius: number = 2000): Promise<PlaceResult[]> => {
     try {

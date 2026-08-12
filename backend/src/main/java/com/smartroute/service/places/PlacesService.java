@@ -6,13 +6,12 @@ import com.smartroute.domain.JourneyStop;
 import com.smartroute.domain.PlanLeg;
 import com.smartroute.domain.User;
 import com.smartroute.dto.AlongRoutePoiResponse;
-import com.smartroute.dto.ParkingOptionResponse;
 import com.smartroute.repository.JourneyRepository;
 import com.smartroute.repository.JourneyStopRepository;
 import org.springframework.stereotype.Service;
 import com.smartroute.service.routing.GeoPoint;
 
-import java.math.BigDecimal;
+
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -24,18 +23,15 @@ public class PlacesService {
     private final JourneyStopRepository journeyStopRepository;
     private final OsmPlacesProvider osmPlacesProvider;
     private final GeocodingProvider geocodingProvider;
-    private final ParkingProvider parkingProvider;
 
     public PlacesService(JourneyRepository journeyRepository,
                          JourneyStopRepository journeyStopRepository,
                          OsmPlacesProvider osmPlacesProvider,
-                         GeocodingProvider geocodingProvider,
-                         ParkingProvider parkingProvider) {
+                         GeocodingProvider geocodingProvider) {
         this.journeyRepository = journeyRepository;
         this.journeyStopRepository = journeyStopRepository;
         this.osmPlacesProvider = osmPlacesProvider;
         this.geocodingProvider = geocodingProvider;
-        this.parkingProvider = parkingProvider;
     }
 
     public List<AlongRoutePoiResponse> getAlongRoutePoi(UUID journeyId, String category, Double maxDetourMinutes, Double maxDetourKm, User user) {
@@ -139,90 +135,6 @@ public class PlacesService {
                 .collect(Collectors.toList());
     }
 
-    public List<ParkingOptionResponse> getParkingOptions(UUID stopId, User user) {
-        JourneyStop stop = journeyStopRepository.findById(stopId)
-                .orElseThrow(() -> new RuntimeException("Journey stop not found"));
-
-        if (!stop.getJourney().getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("Unauthorized access to journey stop");
-        }
-
-        List<ParkingResult> parkingLots = parkingProvider.findNearby(new GeoPoint(stop.getLat(), stop.getLng()), 800);
-
-        // Calculate planned arrival time (ETA) of this stop in the active/selected plan
-        LocalDateTime routeArrivalTime = calculateStopRouteArrivalTime(stop);
-
-        List<ParkingOptionResponse> options = new ArrayList<>();
-        for (ParkingResult lot : parkingLots) {
-            double distance = lot.getDistanceMeters() != null ? lot.getDistanceMeters() : haversineDistance(stop.getLat(), stop.getLng(), lot.getLatitude(), lot.getLongitude());
-            
-            // Limit otopark search to 300-800m çevresi (or keep all up to 800m but display walking info)
-            // Let's filter to keep ones within 800m
-            if (distance <= 800.0) {
-                double walkTimeMinutes = distance / (1.4 * 60.0); // 1.4 m/s walking speed
-                
-                // Mocks or simple deterministic formula based on rating & hash of placeId
-                double occupancyRate = 0.3 + (Math.abs(lot.getId().hashCode()) % 60) / 100.0;
-                double parkingSearchTimeMinutes = 2.0 + (occupancyRate * 5.0); // 2 to 7 minutes search time
-                
-                LocalDateTime effectiveArrival = routeArrivalTime
-                        .plusSeconds((long) (parkingSearchTimeMinutes * 60))
-                        .plusSeconds((long) (walkTimeMinutes * 60));
-
-                ParkingOptionResponse option = new ParkingOptionResponse();
-                option.setPlaceId(lot.getId());
-                option.setName(lot.getName());
-                option.setAddress(lot.getAccess() != null ? "Access: " + lot.getAccess() : "OSM Parking");
-                option.setLat(lot.getLatitude());
-                option.setLng(lot.getLongitude());
-                option.setDistanceMeters((int) distance);
-                option.setWalkTimeMinutes(walkTimeMinutes);
-                option.setParkingSearchTimeEstimateMinutes(parkingSearchTimeMinutes);
-                option.setEffectiveArrivalTime(effectiveArrival);
-                option.setOccupancyRate(occupancyRate);
-                
-                boolean isFree = lot.getFee() != null ? !lot.getFee() : (lot.getName().toLowerCase().contains("free") || (Math.abs(lot.getId().hashCode()) % 5 == 0));
-                option.setPaymentType(isFree ? "free" : "paid");
-                option.setCostEstimate(isFree ? BigDecimal.ZERO : BigDecimal.valueOf(5.0 + (Math.abs(lot.getId().hashCode()) % 15)));
-
-                options.add(option);
-            }
-        }
-
-        // Sort by effective arrival time ascending
-        return options.stream()
-                .sorted(Comparator.comparing(ParkingOptionResponse::getEffectiveArrivalTime))
-                .collect(Collectors.toList());
-    }
-
-    private LocalDateTime calculateStopRouteArrivalTime(JourneyStop stop) {
-        Journey journey = stop.getJourney();
-        JourneyPlan plan = journey.getPlans().stream()
-                .filter(JourneyPlan::getIsSelected)
-                .findFirst()
-                .orElse(null);
-
-        if (plan == null && !journey.getPlans().isEmpty()) {
-            plan = journey.getPlans().get(0);
-        }
-
-        LocalDateTime time = journey.getPlannedDepartureTime() != null 
-                ? journey.getPlannedDepartureTime() : LocalDateTime.now();
-
-        if (plan == null) {
-            return time;
-        }
-
-        for (PlanLeg leg : plan.getLegs()) {
-            time = time.plusSeconds(leg.getDurationSeconds());
-            if (leg.getToStop().getId().equals(stop.getId())) {
-                return time;
-            }
-            time = time.plusMinutes(leg.getToStop().getVisitDurationMinutes());
-        }
-
-        return time;
-    }
 
     private String mapCategoryToPlacesType(String category) {
         if (category == null) return "point_of_interest";

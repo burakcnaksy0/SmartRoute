@@ -10,7 +10,7 @@ export interface JourneyStopRequest {
   timeWindowStart?: string; // ISO 8601
   timeWindowEnd?: string;
   priority?: 'critical' | 'high' | 'normal' | 'low';
-  stopType?: 'errand' | 'meeting' | 'poi' | 'parking' | 'pickup';
+  stopType?: 'errand' | 'meeting' | 'poi' | 'pickup';
 }
 
 export interface JourneyRequest {

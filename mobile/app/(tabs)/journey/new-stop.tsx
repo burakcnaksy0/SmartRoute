@@ -23,6 +23,7 @@ import { ScreenHeader } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { placesApi, PlaceResult } from '@/api/places';
 import MapLocationView, { MapMarkerItem } from '@/components/MapLocationView';
+import { useSavedLocationStore } from '@/store/savedLocationStore';
 import MapLocationPickerModal, { PickedLocationResult } from '@/components/MapLocationPickerModal';
 
 const C = Colors.light;
@@ -41,6 +42,8 @@ export default function NewStopScreen() {
     isLoading,
     error,
   } = useJourneyStore();
+
+  const { locations: savedLocations, fetchLocations } = useSavedLocationStore();
 
   // Starting location states
   const [startAddress, setStartAddress] = useState('Mevcut Konum (Kadıköy)');
@@ -89,6 +92,7 @@ export default function NewStopScreen() {
 
   useEffect(() => {
     requestGPSLocation();
+    fetchLocations();
   }, []);
 
   // Fetch dynamic recommendations (STOP-003)
@@ -472,6 +476,36 @@ export default function NewStopScreen() {
             ))}
           </View>
         </View>
+
+        {/* Saved Locations (Kaydedilenler - FUT-001) */}
+        {savedLocations.length > 0 && (
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeading}>KAYDEDİLENLER</Text>
+            <View style={styles.itemList}>
+              {savedLocations.map((item, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.itemCard}
+                  activeOpacity={0.7}
+                  onPress={() => handleQuickAdd(item.label, item.lat, item.lng, item.category || 'poi')}
+                >
+                  <View style={[styles.itemIconBg, { backgroundColor: C.primary + '20' }]}>
+                    <MaterialIcons 
+                      name={item.category === 'favorite' ? 'favorite' : 'bookmark'} 
+                      size={18} 
+                      color={C.primary} 
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.itemTitle}>{item.label}</Text>
+                    <Text style={styles.itemSub}>{item.address}</Text>
+                  </View>
+                  <MaterialIcons name="add-circle-outline" size={22} color={C.primary} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Suggested Places (Önerilenler) */}
         <View style={styles.sectionBlock}>

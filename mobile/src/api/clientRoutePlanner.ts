@@ -19,7 +19,7 @@ export const clientRoutePlanner = {
   replan: journeyApi.replan,
   searchPlaces: placesApi.search,
   reverseGeocode: placesApi.reverseGeocode,
-  findNearbyParking: placesApi.getNearbyParking,
+//   findNearbyParking: placesApi.getNearbyParking,
 };
 
 export default clientRoutePlanner;

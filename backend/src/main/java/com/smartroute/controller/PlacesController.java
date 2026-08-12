@@ -30,11 +30,11 @@ public class PlacesController {
                 .orElseThrow(() -> new UserNotFoundException("Oturum açmış kullanıcı bulunamadı."));
     }
 
-    @GetMapping("/{id}/parking-options")
-    public ResponseEntity<List<ParkingOptionResponse>> getParkingOptions(@PathVariable UUID id) {
-        User user = getCurrentUser();
-        return ResponseEntity.ok(placesService.getParkingOptions(id, user));
-    }
+//    @GetMapping("/{id}/parking-options")
+//    public ResponseEntity<List<ParkingOptionResponse>> getParkingOptions(@PathVariable UUID id) {
+//        User user = getCurrentUser();
+//        return ResponseEntity.ok(placesService.getParkingOptions(id, user));
+//    }
 
     @GetMapping("/search")
     public ResponseEntity<List<com.smartroute.service.places.GooglePlaceResult>> searchPlaces(@RequestParam String query) {

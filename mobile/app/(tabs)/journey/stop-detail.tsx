@@ -18,14 +18,14 @@ import { useJourneyStore } from '@/store/journeyStore';
 import { Colors, Spacing, Rounded, Shadow, Typography, TabBarHeight } from '@/constants/theme';
 import { ScreenHeader } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
-import { placesApi, NearbyParkingResult } from '@/api/places';
+import { placesApi } from '@/api/places';
 import MapLocationView from '@/components/MapLocationView';
 import MapLocationPickerModal, { PickedLocationResult } from '@/components/MapLocationPickerModal';
 
 const C = Colors.light;
 
 type Priority = 'low' | 'normal' | 'high' | 'critical';
-type StopType = 'errand' | 'meeting' | 'poi' | 'parking' | 'pickup';
+type StopType = 'errand' | 'meeting' | 'poi' | 'pickup';
 
 function timeToIso(time: string): string {
   const today = new Date();
@@ -76,11 +76,6 @@ export default function StopDetailScreen() {
   const [windowStart, setWindowStart] = useState(isoToTime(existingStop?.timeWindowStart) || '09:00');
   const [windowEnd, setWindowEnd] = useState(isoToTime(existingStop?.timeWindowEnd) || '12:00');
 
-  // Parking preferences
-  const [parkingPref, setParkingPref] = useState<'street' | 'garage' | 'none'>('street');
-  const [nearbyParking, setNearbyParking] = useState<NearbyParkingResult[]>([]);
-  const [isLoadingParking, setIsLoadingParking] = useState(false);
-
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Picker modal state
@@ -90,18 +85,6 @@ export default function StopDetailScreen() {
     setLng(result.longitude);
     if (result.placeName) setPlaceName(result.placeName);
   };
-
-  // Fetch nearby parking options from backend
-  useEffect(() => {
-    if (parkingPref !== 'none') {
-      setIsLoadingParking(true);
-      placesApi
-        .getNearbyParking(lat, lng)
-        .then((results) => setNearbyParking(results))
-        .catch((err) => console.warn('Parking fetch error:', err))
-        .finally(() => setIsLoadingParking(false));
-    }
-  }, [parkingPref, lat, lng]);
 
   const incrementDuration = () => {
     setDuration((prev) => Math.min(prev + 15, 480));
@@ -167,8 +150,6 @@ export default function StopDetailScreen() {
         return 'business-center';
       case 'pickup':
         return 'local-shipping';
-      case 'parking':
-        return 'local-parking';
       case 'poi':
         return 'star';
       default:
@@ -382,103 +363,7 @@ export default function StopDetailScreen() {
           )}
         </View>
 
-        {/* Parking Preferences & Nearby Options */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.cardSectionTitle}>PARK TERCİHİ</Text>
-          <View style={styles.parkingChipsRow}>
-            <TouchableOpacity
-              style={[
-                styles.parkingChip,
-                parkingPref === 'street' && styles.parkingChipActive,
-              ]}
-              onPress={() => setParkingPref('street')}
-            >
-              <MaterialIcons
-                name="signpost"
-                size={18}
-                color={parkingPref === 'street' ? C.primary : C.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.parkingChipText,
-                  parkingPref === 'street' && styles.parkingChipTextActive,
-                ]}
-              >
-                Sokak
-              </Text>
-            </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.parkingChip,
-                parkingPref === 'garage' && styles.parkingChipActive,
-              ]}
-              onPress={() => setParkingPref('garage')}
-            >
-              <MaterialIcons
-                name="garage"
-                size={18}
-                color={parkingPref === 'garage' ? C.primary : C.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.parkingChipText,
-                  parkingPref === 'garage' && styles.parkingChipTextActive,
-                ]}
-              >
-                Kapalı Garaj
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.parkingChip,
-                parkingPref === 'none' && styles.parkingChipActive,
-              ]}
-              onPress={() => setParkingPref('none')}
-            >
-              <MaterialIcons
-                name="block"
-                size={18}
-                color={parkingPref === 'none' ? C.primary : C.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.parkingChipText,
-                  parkingPref === 'none' && styles.parkingChipTextActive,
-                ]}
-              >
-                Gerek Yok
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Nearby Parking List */}
-          {parkingPref !== 'none' && (
-            <View style={styles.parkingList}>
-              {isLoadingParking ? (
-                <View style={styles.parkingLoading}>
-                  <ActivityIndicator size="small" color={C.primary} />
-                  <Text style={styles.parkingLoadingText}>Otoparklar taranıyor...</Text>
-                </View>
-              ) : nearbyParking.length > 0 ? (
-                nearbyParking.slice(0, 3).map((p, idx) => (
-                  <View key={p.id || idx} style={styles.parkingItem}>
-                    <MaterialIcons name="local-parking" size={20} color={C.primary} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.parkingName}>{p.placeName}</Text>
-                      <Text style={styles.parkingMeta}>
-                        {p.walkTimeMinutes} dk yürüme ({p.distanceMeters} m) · {p.fee ? 'Ücretli' : 'Ücretsiz'}
-                      </Text>
-                    </View>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.noParkingText}>Bu konuma yakın kayıtlı otopark bulunamadı.</Text>
-              )}
-            </View>
-          )}
-        </View>
       </ScrollView>
 
       {/* Footer Actions */}
@@ -701,72 +586,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 0,
   },
-  parkingChipsRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  parkingChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: C.surfaceLow,
-    borderRadius: Rounded.md,
-    paddingVertical: 10,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  parkingChipActive: {
-    borderColor: C.primary,
-    backgroundColor: C.primaryFixed,
-  },
-  parkingChipText: {
-    ...Typography.caption,
-    color: C.textSecondary,
-    fontWeight: '600',
-  },
-  parkingChipTextActive: {
-    color: C.primary,
-    fontWeight: '700',
-  },
-  parkingList: {
-    marginTop: Spacing.sm,
-    gap: Spacing.xs,
-  },
-  parkingLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    padding: Spacing.sm,
-  },
-  parkingLoadingText: {
-    ...Typography.caption,
-    color: C.textSecondary,
-  },
-  parkingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.surfaceLow,
-    borderRadius: Rounded.md,
-    padding: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  parkingName: {
-    ...Typography.bodySmall,
-    fontWeight: '600',
-    color: C.text,
-  },
-  parkingMeta: {
-    ...Typography.caption,
-    color: C.textSecondary,
-  },
-  noParkingText: {
-    ...Typography.caption,
-    color: C.textSecondary,
-    fontStyle: 'italic',
-    padding: Spacing.xs,
-  },
+
   errorText: {
     ...Typography.caption,
     color: C.error,

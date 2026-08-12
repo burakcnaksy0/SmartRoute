@@ -834,34 +834,9 @@ public class JourneyPlanningService {
     }
 
     private double[] getStopParkingDifficulties(List<JourneyStop> stops, User user) {
+        // Parking feature disabled — return neutral difficulty for all stops
         double[] difficulties = new double[stops.size()];
-        for (int i = 0; i < stops.size(); i++) {
-            JourneyStop stop = stops.get(i);
-            try {
-                if (stop.getId() != null) {
-                    List<com.smartroute.dto.ParkingOptionResponse> options = placesService.getParkingOptions(stop.getId(), user);
-                    if (options.isEmpty()) {
-                        difficulties[i] = 0.8;
-                    } else {
-                        double minDiff = 1.0;
-                        for (com.smartroute.dto.ParkingOptionResponse opt : options) {
-                            double priceVal = opt.getCostEstimate() != null ? opt.getCostEstimate().doubleValue() : 0.0;
-                            double diff = (opt.getOccupancyRate() != null ? opt.getOccupancyRate() : 0.5) * 0.4
-                                    + (opt.getWalkTimeMinutes() / 10.0) * 0.4
-                                    + (priceVal / 20.0) * 0.2;
-                            if (diff < minDiff) {
-                                minDiff = diff;
-                            }
-                        }
-                        difficulties[i] = minDiff;
-                    }
-                } else {
-                    difficulties[i] = 0.5;
-                }
-            } catch (Exception e) {
-                difficulties[i] = 0.5;
-            }
-        }
+        java.util.Arrays.fill(difficulties, 0.5);
         return difficulties;
     }
 

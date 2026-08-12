@@ -6,9 +6,7 @@ import com.smartroute.service.routing.GeoPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -19,8 +17,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-@Service
-@ConditionalOnProperty(name = "providers.parking", havingValue = "overpass", matchIfMissing = true)
+// @Service
+// @ConditionalOnProperty(name = "providers.parking", havingValue = "overpass", matchIfMissing = true)
 public class OverpassParkingProvider implements ParkingProvider {
 
     private static final Logger log = LoggerFactory.getLogger(OverpassParkingProvider.class);

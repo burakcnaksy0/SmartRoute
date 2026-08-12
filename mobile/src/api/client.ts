@@ -28,6 +28,7 @@ const getBaseUrl = (): string => {
 };
 
 const baseUrl = getBaseUrl();
+console.log('🚀 SMART ROUTE API BASE URL HEDEFİ:', baseUrl);
 
 export const api = axios.create({
   baseURL: baseUrl,
