@@ -22,6 +22,8 @@ import { Colors, Spacing, Rounded, Shadow, Typography, TabBarHeight } from '@/co
 import { ScreenHeader } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { placesApi, PlaceResult } from '@/api/places';
+import MapLocationView, { MapMarkerItem } from '@/components/MapLocationView';
+import MapLocationPickerModal, { PickedLocationResult } from '@/components/MapLocationPickerModal';
 
 const C = Colors.light;
 
@@ -52,6 +54,13 @@ export default function NewStopScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
 
+  // Map Picker State
+  const [pickerModalVisible, setPickerModalVisible] = useState(false);
+
+  // Dynamic Suggestions State (STOP-003)
+  const [suggestedPlaces, setSuggestedPlaces] = useState<any[]>([]);
+  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
+
   // Request GPS Location
   const requestGPSLocation = async () => {
     setIsLocating(true);
@@ -81,6 +90,50 @@ export default function NewStopScreen() {
   useEffect(() => {
     requestGPSLocation();
   }, []);
+
+  // Fetch dynamic recommendations (STOP-003)
+  useEffect(() => {
+    if (startLat !== 41.0082 && startLng !== 28.9784) {
+      loadRecommendations(startLat, startLng);
+    }
+  }, [startLat, startLng]);
+
+  const loadRecommendations = async (lat: number, lng: number) => {
+    setIsSuggestionsLoading(true);
+    try {
+      const results = await placesApi.getRecommendations(lat, lng, 3000);
+      const mapped = results.map(r => {
+        let type = 'Nokta';
+        let icon = 'place';
+        
+        const nameLower = (r.name || '').toLowerCase();
+        if (nameLower.includes('cafe') || nameLower.includes('kahve') || nameLower.includes('starbucks')) {
+          type = 'Kahve & Mola';
+          icon = 'local-cafe';
+        } else if (nameLower.includes('park')) {
+          type = 'Açık Alan';
+          icon = 'park';
+        } else if (nameLower.includes('istasyon') || nameLower.includes('station') || nameLower.includes('marmaray') || nameLower.includes('metro')) {
+          type = 'Toplu Taşıma';
+          icon = 'train';
+        }
+
+        return {
+          title: r.name || 'Önerilen Yer',
+          type,
+          lat: r.lat,
+          lng: r.lng,
+          icon,
+        };
+      });
+      // Sort and take top 4
+      setSuggestedPlaces(mapped.slice(0, 4));
+    } catch (e) {
+      console.warn('Failed to load recommendations', e);
+    } finally {
+      setIsSuggestionsLoading(false);
+    }
+  };
 
   // Debounced search for places
   useEffect(() => {
@@ -151,8 +204,13 @@ export default function NewStopScreen() {
 
       const journey = await createJourney(requestBody);
       if (journey) {
+        // Pass destination separately if available (ROUTE-007)
+        const destStore = useJourneyStore.getState().draftDestination;
+        const destParams = destStore ? { lat: destStore.latitude, lng: destStore.longitude } : undefined;
+
         const success = await optimizeJourney(journey.id, {
           returnToStart: false,
+          destination: destParams,
           preferences: {
             profileType: 'fast',
             avoidTolls: false,
@@ -172,7 +230,7 @@ export default function NewStopScreen() {
         Alert.alert('Hata', err);
       }
     } catch (e: any) {
-      Alert.alert('Bağlantı Hatası', e?.message || 'Sunucu ile iletişim kurulamadı.');
+      Alert.alert('Bağlantı Hatası', e?.userMessage || 'Sunucu ile iletişim kurulamadı.');
     }
   };
 
@@ -182,11 +240,46 @@ export default function NewStopScreen() {
     { title: 'Sabiha Gökçen Havalimanı', subtitle: '45 dk · 38 km', lat: 40.898, lng: 29.309, icon: 'flight' },
   ];
 
-  const suggestedPlaces = [
-    { title: 'Starbucks Reserve', type: 'Kahve & Mola', lat: 40.978, lng: 29.034, icon: 'local-cafe' },
-    { title: 'Marmaray Ayrılık Çeşmesi', type: 'Toplu Taşıma', lat: 41.001, lng: 29.031, icon: 'train' },
-    { title: 'Fenerbahçe Parkı', type: 'Açık Alan', lat: 40.969, lng: 29.038, icon: 'park' },
-  ];
+  const mapMarkers = React.useMemo<MapMarkerItem[]>(() => {
+    const list: MapMarkerItem[] = [];
+    list.push({
+      id: 'start',
+      latitude: startLat,
+      longitude: startLng,
+      title: 'Başlangıç Noktası',
+      subtitle: startAddress,
+      type: 'start',
+    });
+    draftStops.forEach((stop, index) => {
+      list.push({
+        id: `stop_${index}`,
+        latitude: stop.lat,
+        longitude: stop.lng,
+        title: stop.placeName,
+        subtitle: stop.placeName || '',
+        type: 'stop',
+        sequenceIndex: index,
+      });
+    });
+    return list;
+  }, [startLat, startLng, startAddress, draftStops]);
+
+  const routePolyline = React.useMemo(() => {
+    const coords = [{ latitude: startLat, longitude: startLng }];
+    draftStops.forEach((stop) => coords.push({ latitude: stop.lat, longitude: stop.lng }));
+    return coords.length > 1 ? coords : [];
+  }, [startLat, startLng, draftStops]);
+
+  const handlePickerSelect = (result: PickedLocationResult) => {
+    router.push({
+      pathname: '/(tabs)/journey/stop-detail' as any,
+      params: {
+        placeName: result.placeName,
+        lat: String(result.latitude),
+        lng: String(result.longitude),
+      },
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -302,6 +395,30 @@ export default function NewStopScreen() {
           </View>
         </View>
 
+        {/* Map View & Add from Map Button */}
+        <View style={styles.sectionBlock}>
+          <View style={styles.mapContainerRow}>
+             <Text style={styles.sectionHeading}>GÜNCEL ROTA HARİTASI</Text>
+             <TouchableOpacity 
+                style={styles.mapAddButton} 
+                activeOpacity={0.8}
+                onPress={() => setPickerModalVisible(true)}
+             >
+               <MaterialIcons name="map" size={16} color={C.onPrimary} />
+               <Text style={styles.mapAddButtonText}>Haritadan Seç</Text>
+             </TouchableOpacity>
+          </View>
+          <View style={styles.mapWrapper}>
+            <MapLocationView
+              height={180}
+              initialLocation={{ latitude: startLat, longitude: startLng }}
+              markers={mapMarkers}
+              routePolyline={routePolyline}
+              expandable={true}
+            />
+          </View>
+        </View>
+
         {/* Selected Draft Stops List */}
         {draftStops.length > 0 && (
           <View style={styles.draftSection}>
@@ -360,7 +477,12 @@ export default function NewStopScreen() {
         <View style={styles.sectionBlock}>
           <Text style={styles.sectionHeading}>ÖNERİLENLER</Text>
           <View style={styles.itemList}>
-            {suggestedPlaces.map((item, idx) => (
+            {isSuggestionsLoading ? (
+              <ActivityIndicator size="small" color={C.primary} style={{ padding: 20 }} />
+            ) : suggestedPlaces.length === 0 ? (
+              <Text style={{ textAlign: 'center', color: C.textSecondary, padding: 20 }}>Yakınlarda öneri bulunamadı.</Text>
+            ) : (
+              suggestedPlaces.map((item, idx) => (
               <TouchableOpacity
                 key={idx}
                 style={styles.itemCard}
@@ -376,7 +498,8 @@ export default function NewStopScreen() {
                 </View>
                 <MaterialIcons name="add-circle-outline" size={22} color={C.primary} />
               </TouchableOpacity>
-            ))}
+              ))
+            )}
           </View>
         </View>
 
@@ -401,6 +524,15 @@ export default function NewStopScreen() {
           onPress={handleOptimizeAndBuild}
         />
       </View>
+
+      <MapLocationPickerModal
+        visible={pickerModalVisible}
+        onClose={() => setPickerModalVisible(false)}
+        mode="stop"
+        initialCoordinates={{ latitude: startLat, longitude: startLng }}
+        existingMarkers={mapMarkers as any}
+        onSelectLocation={handlePickerSelect}
+      />
     </SafeAreaView>
   );
 }
@@ -514,6 +646,32 @@ const styles = StyleSheet.create({
   },
   sectionBlock: {
     gap: Spacing.sm,
+  },
+  mapContainerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  mapAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Rounded.full,
+    gap: 4,
+  },
+  mapAddButtonText: {
+    ...Typography.caption,
+    color: C.onPrimary,
+    fontWeight: '600',
+  },
+  mapWrapper: {
+    borderRadius: Rounded.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: C.outlineVariant,
   },
   sectionHeading: {
     ...Typography.caption,

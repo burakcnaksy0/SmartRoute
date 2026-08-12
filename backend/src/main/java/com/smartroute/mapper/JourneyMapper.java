@@ -28,6 +28,9 @@ public class JourneyMapper {
         response.setStartLat(journey.getStartLat());
         response.setStartLng(journey.getStartLng());
         response.setStartAddressText(journey.getStartAddressText());
+        response.setDestinationLat(journey.getDestinationLat());
+        response.setDestinationLng(journey.getDestinationLng());
+        response.setDestinationAddressText(journey.getDestinationAddressText());
         response.setStatus(journey.getStatus());
         response.setPlannedDepartureTime(journey.getPlannedDepartureTime());
         response.setDeadlineTime(journey.getDeadlineTime());

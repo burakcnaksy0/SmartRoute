@@ -53,7 +53,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       const defaultVehicle = vehicles.find(v => v.isDefault) ?? null;
       set({ vehicles, defaultVehicle, isLoading: false });
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Araçlar yüklenemedi.';
+      const msg = e?.userMessage || e?.response?.data?.error || 'Araçlar yüklenemedi.';
       set({ error: msg, isLoading: false });
     }
   },
@@ -67,7 +67,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       set({ vehicles: updated, defaultVehicle, isLoading: false });
       return vehicle;
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Araç oluşturulamadı.';
+      const msg = e?.userMessage || e?.response?.data?.error || 'Araç oluşturulamadı.';
       set({ error: msg, isLoading: false });
       return null;
     }
@@ -86,7 +86,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       set({ vehicles: withSingleDefault, defaultVehicle, isLoading: false });
       return updated;
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Araç güncellenemedi.';
+      const msg = e?.userMessage || e?.response?.data?.error || 'Araç güncellenemedi.';
       set({ error: msg, isLoading: false });
       return null;
     }
@@ -101,7 +101,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       set({ vehicles, defaultVehicle, isLoading: false });
       return true;
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Araç silinemedi.';
+      const msg = e?.userMessage || e?.response?.data?.error || 'Araç silinemedi.';
       set({ error: msg, isLoading: false });
       return false;
     }
@@ -113,7 +113,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       const expense = await vehicleApi.getExpense(journeyId);
       set({ currentExpense: expense, isExpenseLoading: false });
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Gider bilgisi yüklenemedi.';
+      const msg = e?.userMessage || e?.response?.data?.error || 'Gider bilgisi yüklenemedi.';
       set({ expenseError: msg, isExpenseLoading: false });
     }
   },
@@ -125,7 +125,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       set({ currentExpense: expense, isExpenseLoading: false });
       return expense;
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Gider kaydedilemedi.';
+      const msg = e?.userMessage || e?.response?.data?.error || 'Gider kaydedilemedi.';
       set({ expenseError: msg, isExpenseLoading: false });
       return null;
     }
@@ -138,7 +138,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       set({ currentExpense: expense, isExpenseLoading: false });
       return expense;
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Gider güncellenemedi.';
+      const msg = e?.userMessage || e?.response?.data?.error || 'Gider güncellenemedi.';
       set({ expenseError: msg, isExpenseLoading: false });
       return null;
     }

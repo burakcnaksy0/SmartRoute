@@ -24,7 +24,7 @@ public class PlanLeg {
     private JourneyStop fromStop;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "to_stop_id", nullable = false)
+    @JoinColumn(name = "to_stop_id")
     private JourneyStop toStop;
 
     @Column(name = "leg_order", nullable = false)

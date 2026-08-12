@@ -303,6 +303,36 @@ public class PlacesService {
         return results;
     }
 
+    public List<GooglePlaceResult> getRecommendations(double lat, double lng, int radius) {
+        List<GooglePlaceResult> recommendations = new ArrayList<>();
+        
+        // Fetch cafes
+        List<GooglePlaceResult> cafes = osmPlacesProvider.searchNearby(lat, lng, radius, "cafe");
+        if (!cafes.isEmpty()) {
+            GooglePlaceResult cafe = cafes.get(0);
+            cafe.setName(cafe.getName());
+            recommendations.add(cafe);
+        }
+
+        // Fetch parks
+        List<GooglePlaceResult> parks = osmPlacesProvider.searchNearby(lat, lng, radius, "park");
+        if (!parks.isEmpty()) {
+            GooglePlaceResult park = parks.get(0);
+            park.setName(park.getName());
+            recommendations.add(park);
+        }
+
+        // Fetch transit
+        List<GooglePlaceResult> transits = osmPlacesProvider.searchNearby(lat, lng, radius, "transit");
+        if (!transits.isEmpty()) {
+            GooglePlaceResult transit = transits.get(0);
+            transit.setName(transit.getName());
+            recommendations.add(transit);
+        }
+
+        return recommendations;
+    }
+
     public String reverseGeocode(double lat, double lng) {
         LocationResult loc = geocodingProvider.reverseGeocode(lat, lng);
         return loc != null ? loc.getFormattedAddress() : "Unknown Location";

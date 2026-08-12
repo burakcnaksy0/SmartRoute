@@ -31,6 +31,15 @@ public class Journey {
     @Column(name = "start_address_text")
     private String startAddressText;
 
+    @Column(name = "destination_lat")
+    private Double destinationLat;
+
+    @Column(name = "destination_lng")
+    private Double destinationLng;
+
+    @Column(name = "destination_address_text")
+    private String destinationAddressText;
+
     @Column(name = "planned_departure_time")
     private LocalDateTime plannedDepartureTime;
 
@@ -163,6 +172,30 @@ public class Journey {
 
     public void setStartAddressText(String startAddressText) {
         this.startAddressText = startAddressText;
+    }
+
+    public Double getDestinationLat() {
+        return destinationLat;
+    }
+
+    public void setDestinationLat(Double destinationLat) {
+        this.destinationLat = destinationLat;
+    }
+
+    public Double getDestinationLng() {
+        return destinationLng;
+    }
+
+    public void setDestinationLng(Double destinationLng) {
+        this.destinationLng = destinationLng;
+    }
+
+    public String getDestinationAddressText() {
+        return destinationAddressText;
+    }
+
+    public void setDestinationAddressText(String destinationAddressText) {
+        this.destinationAddressText = destinationAddressText;
     }
 
     public LocalDateTime getPlannedDepartureTime() {

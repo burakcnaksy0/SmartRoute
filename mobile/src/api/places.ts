@@ -90,6 +90,18 @@ export const placesApi = {
       return [];
     }
   },
+
+  getRecommendations: async (lat: number, lng: number, radius: number = 2000): Promise<PlaceResult[]> => {
+    try {
+      const response = await api.get('/places/recommendations', {
+        params: { lat, lng, radius },
+      });
+      return response.data || [];
+    } catch (err) {
+      console.warn('placesApi.getRecommendations error:', err);
+      return [];
+    }
+  },
 };
 
 export default placesApi;

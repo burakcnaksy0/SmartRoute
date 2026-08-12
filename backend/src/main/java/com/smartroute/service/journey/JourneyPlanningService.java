@@ -167,6 +167,17 @@ public class JourneyPlanningService {
             journey.setStartLng(request.getStartLocation().getLng());
         }
 
+        if (request.getDestination() != null) {
+            journey.setDestinationLat(request.getDestination().getLat());
+            journey.setDestinationLng(request.getDestination().getLng());
+            if (request.isReturnToStart()) {
+                throw new IllegalArgumentException("Hedef konum ile başlangıç noktasına dönüş aynı anda kullanılamaz.");
+            }
+        } else {
+            journey.setDestinationLat(null);
+            journey.setDestinationLng(null);
+        }
+
         if (request.getStops() != null && !request.getStops().isEmpty()) {
             journey.getStops().clear();
             int seq = 1;
@@ -190,8 +201,8 @@ public class JourneyPlanningService {
         journeyRepository.saveAndFlush(journey);
 
         // 2. Validations
-        if (journey.getStops().isEmpty()) {
-            throw new IllegalArgumentException("En az bir durak bulunmalıdır.");
+        if (journey.getStops().isEmpty() && journey.getDestinationLat() == null) {
+            throw new IllegalArgumentException("En az bir durak veya hedef bulunmalıdır.");
         }
         validateStopsAndCoordinates(journey);
 
@@ -200,6 +211,10 @@ public class JourneyPlanningService {
         points.add(new GeoPoint(journey.getStartLat(), journey.getStartLng()));
         for (JourneyStop stop : journey.getStops()) {
             points.add(new GeoPoint(stop.getLat(), stop.getLng()));
+        }
+        boolean hasDestination = journey.getDestinationLat() != null && journey.getDestinationLng() != null;
+        if (hasDestination) {
+            points.add(new GeoPoint(journey.getDestinationLat(), journey.getDestinationLng()));
         }
 
         // 4. Fetch Matrix
@@ -210,7 +225,8 @@ public class JourneyPlanningService {
                 journey.getStops(),
                 matrix,
                 journey.getPlannedDepartureTime(),
-                request.isReturnToStart()
+                request.isReturnToStart(),
+                hasDestination
         );
 
         // Clean previous plans
@@ -373,6 +389,32 @@ public class JourneyPlanningService {
             totalDistance += route.getDistanceMeters();
             totalDuration += route.getDurationSeconds();
             totalTollCost = totalTollCost.add(route.getTollCost());
+        } else if (journey.getDestinationLat() != null && journey.getDestinationLng() != null) {
+            GeoPoint from = prevStop != null ? new GeoPoint(prevStop.getLat(), prevStop.getLng()) : new GeoPoint(journey.getStartLat(), journey.getStartLng());
+            GeoPoint to = new GeoPoint(journey.getDestinationLat(), journey.getDestinationLng());
+
+            List<RouteCandidate> routeCandidates = routingProvider.computeRoute(from, to, options);
+            if (routeCandidates.isEmpty()) {
+                throw new InfeasiblePlanException("Hedef noktasına rota hesaplanamadı.");
+            }
+
+            RouteCandidate route = routeCandidates.get(0);
+
+            PlanLeg leg = new PlanLeg();
+            leg.setPlan(plan);
+            leg.setFromStop(prevStop);
+            leg.setToStop(null); // Destination has no JourneyStop representation
+            leg.setLegOrder(legOrder++);
+            leg.setDistanceMeters(route.getDistanceMeters());
+            leg.setDurationSeconds(route.getDurationSeconds());
+            leg.setPolylineEncoded(route.getPolylineEncoded());
+            leg.setTollCost(route.getTollCost());
+
+            plan.getLegs().add(leg);
+
+            totalDistance += route.getDistanceMeters();
+            totalDuration += route.getDurationSeconds();
+            totalTollCost = totalTollCost.add(route.getTollCost());
         }
 
         plan.setTotalDistanceMeters(totalDistance);
@@ -454,6 +496,7 @@ public class JourneyPlanningService {
                 .collect(Collectors.toList());
 
         boolean returnToStart = selectedPlan.getLegs().size() > journey.getStops().size();
+        boolean hasDestination = journey.getDestinationLat() != null && journey.getDestinationLng() != null;
 
         // Build point list to call Distance Matrix
         List<GeoPoint> points = new ArrayList<>();
@@ -463,6 +506,8 @@ public class JourneyPlanningService {
         }
         if (returnToStart) {
             points.add(new GeoPoint(journey.getStartLat(), journey.getStartLng()));
+        } else if (hasDestination) {
+            points.add(new GeoPoint(journey.getDestinationLat(), journey.getDestinationLng()));
         }
 
         DistanceMatrixResult matrix = routingProvider.computeMatrix(points, points);
@@ -495,7 +540,7 @@ public class JourneyPlanningService {
             currentCheckTime = departureTime;
             currentNodeIndex = i + 1;
         }
-        if (returnToStart) {
+        if (returnToStart || hasDestination) {
             long travelTime = matrix.getDurations()[currentNodeIndex][remainingStopsCurrentOrder.size() + 1];
             currentCheckTime = currentCheckTime.plusSeconds(travelTime);
         }
@@ -508,14 +553,14 @@ public class JourneyPlanningService {
             currentSequenceTravelTime += matrix.getDurations()[nodeIdx][i + 1];
             nodeIdx = i + 1;
         }
-        if (returnToStart) {
+        if (returnToStart || hasDestination) {
             currentSequenceTravelTime += matrix.getDurations()[nodeIdx][remainingStopsCurrentOrder.size() + 1];
         }
 
         // Determine original remaining duration from original plan legs
         long originalRemainingDuration = 0;
         for (PlanLeg leg : selectedPlan.getLegs()) {
-            boolean isReturnLeg = (leg.getLegOrder() == selectedPlan.getLegs().size() && returnToStart);
+            boolean isReturnLeg = (leg.getLegOrder() == selectedPlan.getLegs().size() && (returnToStart || hasDestination));
             boolean toStopRemaining = (leg.getToStop() != null && !completedStopIds.contains(leg.getToStop().getId()));
             if (toStopRemaining || (isReturnLeg && !completedStopIds.isEmpty() && completedStopIds.size() < journey.getStops().size())) {
                 originalRemainingDuration += leg.getDurationSeconds();
@@ -543,7 +588,8 @@ public class JourneyPlanningService {
                     remainingStopsCurrentOrder,
                     matrix,
                     now,
-                    returnToStart
+                    returnToStart,
+                    hasDestination
             );
 
             double[] remainingParkingDifficulties = getStopParkingDifficulties(remainingStopsCurrentOrder, user);
@@ -571,7 +617,7 @@ public class JourneyPlanningService {
             if (differentOrder && savings > 300) {
                 // Yes, there is a better path and savings is > 5 minutes!
                 // Build proposed plan DTO
-                JourneyPlan proposedPlan = buildProposedPlan(journey, remainingStopsCurrentOrder, bestPerm, returnToStart, new GeoPoint(currentLat, currentLng));
+                JourneyPlan proposedPlan = buildProposedPlan(journey, remainingStopsCurrentOrder, bestPerm, returnToStart, hasDestination, new GeoPoint(currentLat, currentLng));
                 
                 // Set order and explain
                 int delayMin = (int) Math.round(delay / 60.0);
@@ -627,7 +673,7 @@ public class JourneyPlanningService {
         return response;
     }
 
-    private JourneyPlan buildProposedPlan(Journey journey, List<JourneyStop> remainingStops, List<Integer> bestPerm, boolean returnToStart, GeoPoint currentLoc) {
+    private JourneyPlan buildProposedPlan(Journey journey, List<JourneyStop> remainingStops, List<Integer> bestPerm, boolean returnToStart, boolean hasDestination, GeoPoint currentLoc) {
         JourneyPlan plan = new JourneyPlan();
         plan.setJourney(journey);
         plan.setPlanLabel("proposed");
@@ -689,6 +735,28 @@ public class JourneyPlanningService {
                 leg.setPlan(plan);
                 leg.setFromStop(prevStop);
                 leg.setToStop(firstStop);
+                leg.setLegOrder(legOrder++);
+                leg.setDistanceMeters(route.getDistanceMeters());
+                leg.setDurationSeconds(route.getDurationSeconds());
+                leg.setPolylineEncoded(route.getPolylineEncoded());
+                leg.setTollCost(route.getTollCost());
+                
+                plan.getLegs().add(leg);
+                
+                totalDistance += route.getDistanceMeters();
+                totalDuration += route.getDurationSeconds();
+                totalTollCost = totalTollCost.add(route.getTollCost());
+            }
+        } else if (hasDestination && prevStop != null) {
+            GeoPoint destPoint = new GeoPoint(journey.getDestinationLat(), journey.getDestinationLng());
+            List<RouteCandidate> routeCandidates = routingProvider.computeRoute(currentPoint, destPoint, options);
+            if (!routeCandidates.isEmpty()) {
+                RouteCandidate route = routeCandidates.get(0);
+                
+                PlanLeg leg = new PlanLeg();
+                leg.setPlan(plan);
+                leg.setFromStop(prevStop);
+                leg.setToStop(null);
                 leg.setLegOrder(legOrder++);
                 leg.setDistanceMeters(route.getDistanceMeters());
                 leg.setDurationSeconds(route.getDurationSeconds());

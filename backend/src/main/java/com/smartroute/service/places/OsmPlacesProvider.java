@@ -242,6 +242,10 @@ public class OsmPlacesProvider {
                                    "way[\"shop\"=\"supermarket\"](around:{radius},{lat},{lng});";
             case "cafe"         -> "node[\"amenity\"=\"cafe\"](around:{radius},{lat},{lng});";
             case "atm"          -> "node[\"amenity\"=\"atm\"](around:{radius},{lat},{lng});";
+            case "park"         -> "node[\"leisure\"=\"park\"](around:{radius},{lat},{lng});\n" +
+                                   "way[\"leisure\"=\"park\"](around:{radius},{lat},{lng});";
+            case "transit"      -> "node[\"public_transport\"=\"station\"](around:{radius},{lat},{lng});\n" +
+                                   "node[\"railway\"=\"station\"](around:{radius},{lat},{lng});";
             default             -> "node[\"amenity\"=\"" + type + "\"](around:{radius},{lat},{lng});";
         };
 

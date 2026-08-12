@@ -125,7 +125,7 @@ export default function JourneyIndexScreen() {
         latitude: stop.lat,
         longitude: stop.lng,
         title: stop.placeName,
-        subtitle: stop.address || `${stop.visitDurationMinutes} dk mola`,
+        subtitle: `${stop.visitDurationMinutes || 15} dk mola`,
         type: 'stop',
         sequenceIndex: index,
         durationMinutes: stop.visitDurationMinutes,
@@ -267,19 +267,15 @@ export default function JourneyIndexScreen() {
     const plannedDepartureTime = today.toISOString().slice(0, 19);
 
     const stopsToOptimize = [...draftStops];
-    if (stopsToOptimize.length === 0) {
-      const destLat = draftDestination ? draftDestination.latitude : userCoords.latitude + 0.02;
-      const destLng = draftDestination ? draftDestination.longitude : userCoords.longitude + 0.02;
-      const destName = destinationQuery.trim() || draftDestination?.address || 'Hedef';
-
-      stopsToOptimize.push({
-        placeName: destName,
-        lat: destLat,
-        lng: destLng,
-        visitDurationMinutes: 30,
-        priority: 'normal',
-        stopType: 'errand',
-      });
+    let destParams = undefined;
+    if (draftDestination) {
+      destParams = {
+        lat: draftDestination.latitude,
+        lng: draftDestination.longitude
+      };
+    } else if (destinationQuery.trim()) {
+      // Fallback if typed but not selected via map
+      destParams = { lat: userCoords.latitude + 0.02, lng: userCoords.longitude + 0.02 };
     }
 
     try {
@@ -295,6 +291,7 @@ export default function JourneyIndexScreen() {
       if (journey) {
         const success = await optimizeJourney(journey.id, {
           returnToStart: false,
+          destination: destParams,
           preferences: {
             profileType: 'fast',
             avoidTolls: false,
@@ -316,7 +313,7 @@ export default function JourneyIndexScreen() {
         Alert.alert('Hata', err);
       }
     } catch (e: any) {
-      Alert.alert('Bağlantı Hatası', e?.message || 'Sunucu ile iletişim kurulamadı.');
+      Alert.alert('Bağlantı Hatası', e?.userMessage || 'Sunucu ile iletişim kurulamadı.');
     }
   };
 
@@ -389,6 +386,7 @@ export default function JourneyIndexScreen() {
             routePolyline={routePolyline}
             expandable={true}
             onLocationChange={handleLocationChange}
+            autoCenterOnInitialLocation={!draftStartLocation}
           />
           {/* Floating Pill on Map */}
           <View style={styles.mapPillOverlay}>
@@ -1044,6 +1042,116 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: C.textSecondary,
     marginTop: 2,
+  },
+  // Draft stops list
+  draftStopsContainer: {
+    marginTop: Spacing.md,
+    backgroundColor: C.surface,
+    borderRadius: Rounded.xl,
+    padding: Spacing.base,
+    ...Shadow.sm,
+    borderWidth: 1,
+    borderColor: C.outlineVariant,
+  },
+  draftStopsHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    marginBottom: Spacing.sm,
+  },
+  draftStopsTitle: {
+    ...Typography.caption,
+    fontWeight: '700' as const,
+    color: C.outline,
+    letterSpacing: 0.8,
+  },
+  clearStopsText: {
+    ...Typography.caption,
+    color: C.error,
+    fontWeight: '600' as const,
+  },
+  draftStopRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: Spacing.xs,
+    gap: Spacing.sm,
+  },
+  draftStopBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: C.primaryFixed,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  draftStopBadgeText: {
+    ...Typography.caption,
+    fontWeight: '700' as const,
+    color: C.primary,
+  },
+  draftStopName: {
+    ...Typography.bodySmall,
+    fontWeight: '600' as const,
+    color: C.text,
+  },
+  draftStopMeta: {
+    ...Typography.caption,
+    color: C.textSecondary,
+    marginTop: 1,
+  },
+  removeStopBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: C.surfaceLow,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  // Map stop pill (duplicate for separate styling)
+  mapStopPill: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: C.surfaceLow,
+    borderRadius: Rounded.xl,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  mapStopPillText: {
+    ...Typography.bodySmall,
+    color: C.text,
+    fontWeight: '600' as const,
+  },
+  editMapBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: C.primaryFixed,
+    borderRadius: Rounded.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    gap: 3,
+  },
+  editMapBadgeText: {
+    ...Typography.caption,
+    color: C.primary,
+    fontWeight: '600' as const,
+    fontSize: 11,
+  },
+  pickMapButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: C.primaryFixed,
+    borderRadius: Rounded.full,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  pickMapButtonText: {
+    ...Typography.caption,
+    color: C.primary,
+    fontWeight: '600' as const,
+    fontSize: 11,
   },
   // Sticky footer
   stickyFooter: {

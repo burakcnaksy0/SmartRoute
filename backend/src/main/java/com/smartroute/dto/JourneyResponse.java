@@ -9,6 +9,9 @@ public class JourneyResponse {
     private Double startLat;
     private Double startLng;
     private String startAddressText;
+    private Double destinationLat;
+    private Double destinationLng;
+    private String destinationAddressText;
     private String status;
     private LocalDateTime plannedDepartureTime;
     private LocalDateTime deadlineTime;
@@ -49,6 +52,30 @@ public class JourneyResponse {
 
     public void setStartAddressText(String startAddressText) {
         this.startAddressText = startAddressText;
+    }
+
+    public Double getDestinationLat() {
+        return destinationLat;
+    }
+
+    public void setDestinationLat(Double destinationLat) {
+        this.destinationLat = destinationLat;
+    }
+
+    public Double getDestinationLng() {
+        return destinationLng;
+    }
+
+    public void setDestinationLng(Double destinationLng) {
+        this.destinationLng = destinationLng;
+    }
+
+    public String getDestinationAddressText() {
+        return destinationAddressText;
+    }
+
+    public void setDestinationAddressText(String destinationAddressText) {
+        this.destinationAddressText = destinationAddressText;
     }
 
     public String getStatus() {

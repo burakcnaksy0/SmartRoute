@@ -72,6 +72,9 @@ export default function MapLocationPickerModal({
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
 
+  // Custom name input (ROUTE-004 / STOP-001)
+  const [customName, setCustomName] = useState('');
+
   // GPS and Map type
   const [hasGps, setHasGps] = useState(false);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
@@ -278,12 +281,14 @@ export default function MapLocationPickerModal({
 
   // Confirm selection
   const handleConfirm = () => {
+    const finalPlaceName = customName.trim() || selectedPlaceName || 'Seçilen Konum';
     onSelectLocation({
       latitude: selectedCoords.latitude,
       longitude: selectedCoords.longitude,
       address: selectedAddress || `${selectedCoords.latitude.toFixed(4)}, ${selectedCoords.longitude.toFixed(4)}`,
-      placeName: selectedPlaceName || 'Seçilen Konum',
+      placeName: finalPlaceName,
     });
+    setCustomName('');
     onClose();
   };
 
@@ -553,6 +558,20 @@ export default function MapLocationPickerModal({
             <Text style={styles.coordsText}>
               Koordinat: {selectedCoords.latitude.toFixed(5)}° N, {selectedCoords.longitude.toFixed(5)}° E
             </Text>
+          </View>
+
+          {/* Custom Name Input (ROUTE-004 / STOP-001) */}
+          <View style={styles.customNameRow}>
+            <MaterialIcons name="edit" size={16} color={C.textSecondary} />
+            <TextInput
+              style={styles.customNameInput}
+              placeholder="Bu konuma özel isim verin (opsiyonel)"
+              placeholderTextColor={C.outline}
+              value={customName}
+              onChangeText={setCustomName}
+              maxLength={60}
+              returnKeyType="done"
+            />
           </View>
 
           <TouchableOpacity
@@ -891,5 +910,21 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontWeight: '600',
     color: C.primary,
+  },
+  customNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: C.surfaceLow,
+    borderRadius: Rounded.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    marginTop: Spacing.xs,
+  },
+  customNameInput: {
+    flex: 1,
+    ...Typography.bodySmall,
+    color: C.text,
+    padding: 0,
   },
 });

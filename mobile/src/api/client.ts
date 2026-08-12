@@ -128,7 +128,57 @@ api.interceptors.response.use(
       }
     }
 
+    // ─── STOP-004 / SYS-002: Centralized Turkish error normalization ───────
+    // Normalize raw technical errors into user-friendly Turkish messages
+    // before rejecting, so no raw axios/JS error messages leak to the UI.
+    normalizeErrorMessage(error);
+
     return Promise.reject(error);
   }
 );
+
+/**
+ * Normalizes error objects with a user-friendly Turkish message.
+ * UI code should use `error.userMessage` instead of `error.message`.
+ */
+function normalizeErrorMessage(error: any): void {
+  // Already has a server-provided Turkish message
+  if (error.response?.data?.error && typeof error.response.data.error === 'string') {
+    error.userMessage = error.response.data.error;
+    return;
+  }
+
+  // Timeout
+  if (error.code === 'ECONNABORTED') {
+    error.userMessage = 'Bağlantı zaman aşımına uğradı. Lütfen tekrar deneyin.';
+    return;
+  }
+
+  // Network error (no response at all)
+  if (!error.response) {
+    error.userMessage = 'Sunucuya ulaşılamıyor. İnternet bağlantınızı kontrol edin.';
+    return;
+  }
+
+  // HTTP status-based messages
+  const status = error.response?.status;
+  if (status === 400) {
+    error.userMessage = error.response?.data?.message || 'Geçersiz istek. Lütfen bilgilerinizi kontrol edin.';
+  } else if (status === 403) {
+    error.userMessage = 'Bu işlem için yetkiniz bulunmuyor.';
+  } else if (status === 404) {
+    error.userMessage = 'İstenen kaynak bulunamadı.';
+  } else if (status === 409) {
+    error.userMessage = 'Bu işlem bir çakışmaya neden oldu. Lütfen sayfayı yenileyip tekrar deneyin.';
+  } else if (status === 422) {
+    error.userMessage = 'Gönderilen veriler işlenemiyor. Lütfen alanları kontrol edin.';
+  } else if (status === 429) {
+    error.userMessage = 'Çok fazla istek gönderildi. Lütfen bir süre bekleyip tekrar deneyin.';
+  } else if (status >= 500) {
+    error.userMessage = 'Sunucuda geçici bir sorun oluştu. Lütfen birkaç dakika sonra tekrar deneyin.';
+  } else {
+    error.userMessage = 'Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.';
+  }
+}
+
 export default api;

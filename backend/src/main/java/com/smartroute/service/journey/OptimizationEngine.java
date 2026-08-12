@@ -63,7 +63,8 @@ public class OptimizationEngine {
             List<JourneyStop> stops,
             DistanceMatrixResult matrix,
             LocalDateTime plannedDepartureTime,
-            boolean returnToStart) {
+            boolean returnToStart,
+            boolean hasDestination) {
 
         int n = stops.size();
         if (n == 0) return Collections.emptyList();
@@ -75,10 +76,10 @@ public class OptimizationEngine {
         List<CandidatePath> feasiblePaths;
         if (n < HEURISTIC_THRESHOLD) {
             // Brute-force: all permutations of indices 1..n
-            feasiblePaths = bruteForce(stops, matrix, plannedDepartureTime, returnToStart, n);
+            feasiblePaths = bruteForce(stops, matrix, plannedDepartureTime, returnToStart, hasDestination, n);
         } else {
             // Heuristic: NN + 2-opt
-            feasiblePaths = nearestNeighborWith2Opt(stops, matrix, plannedDepartureTime, returnToStart, n);
+            feasiblePaths = nearestNeighborWith2Opt(stops, matrix, plannedDepartureTime, returnToStart, hasDestination, n);
         }
 
         if (feasiblePaths.isEmpty()) {
@@ -255,6 +256,7 @@ public class OptimizationEngine {
             DistanceMatrixResult matrix,
             LocalDateTime departure,
             boolean returnToStart,
+            boolean hasDestination,
             int n) {
 
         List<List<Integer>> perms = new ArrayList<>();
@@ -264,7 +266,7 @@ public class OptimizationEngine {
 
         List<CandidatePath> result = new ArrayList<>();
         for (List<Integer> perm : perms) {
-            evaluateAndAdd(perm, stops, matrix, departure, returnToStart, result);
+            evaluateAndAdd(perm, stops, matrix, departure, returnToStart, hasDestination, result);
         }
         return result;
     }
@@ -301,6 +303,7 @@ public class OptimizationEngine {
             DistanceMatrixResult matrix,
             LocalDateTime departure,
             boolean returnToStart,
+            boolean hasDestination,
             int n) {
 
         // ─── Nearest Neighbor construction ───────────────────────────────────
@@ -310,11 +313,11 @@ public class OptimizationEngine {
         if (tour.isEmpty()) return Collections.emptyList();
 
         // ─── 2-opt local search ──────────────────────────────────────────────
-        tour = twoOpt(tour, stops, matrix, departure);
+        tour = twoOpt(tour, stops, matrix, departure, returnToStart, hasDestination);
 
         // Build the single CandidatePath from the final tour
         List<CandidatePath> result = new ArrayList<>();
-        evaluateAndAdd(tour, stops, matrix, departure, returnToStart, result);
+        evaluateAndAdd(tour, stops, matrix, departure, returnToStart, hasDestination, result);
 
         // Also try a few random restarts to escape local optima for large sets
         if (n >= 15) {
@@ -322,8 +325,8 @@ public class OptimizationEngine {
             for (int attempt = 0; attempt < 3; attempt++) {
                 List<Integer> shuffled = new ArrayList<>(tour);
                 Collections.shuffle(shuffled, rng);
-                shuffled = twoOpt(shuffled, stops, matrix, departure);
-                evaluateAndAdd(shuffled, stops, matrix, departure, returnToStart, result);
+                shuffled = twoOpt(shuffled, stops, matrix, departure, returnToStart, hasDestination);
+                evaluateAndAdd(shuffled, stops, matrix, departure, returnToStart, hasDestination, result);
             }
         }
 
@@ -401,7 +404,9 @@ public class OptimizationEngine {
             List<Integer> tour,
             List<JourneyStop> stops,
             DistanceMatrixResult matrix,
-            LocalDateTime departure) {
+            LocalDateTime departure,
+            boolean returnToStart,
+            boolean hasDestination) {
 
         int n = tour.size();
         boolean improved = true;
@@ -411,7 +416,7 @@ public class OptimizationEngine {
             for (int i = 0; i < n - 1; i++) {
                 for (int k = i + 1; k < n; k++) {
                     List<Integer> newTour = twoOptSwap(tour, i, k);
-                    if (tourDuration(newTour, matrix) < tourDuration(tour, matrix)
+                    if (tourDuration(newTour, matrix, returnToStart, hasDestination) < tourDuration(tour, matrix, returnToStart, hasDestination)
                             && isTourFeasible(newTour, stops, matrix, departure)) {
                         tour = newTour;
                         improved = true;
@@ -436,10 +441,15 @@ public class OptimizationEngine {
      * Total travel duration for a tour (ignoring visit durations for 2-opt cost comparison,
      * since they are constant regardless of ordering).
      */
-    private long tourDuration(List<Integer> tour, DistanceMatrixResult matrix) {
+    private long tourDuration(List<Integer> tour, DistanceMatrixResult matrix, boolean returnToStart, boolean hasDestination) {
         long total = matrix.getDurations()[0][tour.get(0)];
         for (int i = 0; i < tour.size() - 1; i++) {
             total += matrix.getDurations()[tour.get(i)][tour.get(i + 1)];
+        }
+        if (returnToStart) {
+            total += matrix.getDurations()[tour.get(tour.size() - 1)][0];
+        } else if (hasDestination) {
+            total += matrix.getDurations()[tour.get(tour.size() - 1)][tour.size() + 1];
         }
         return total;
     }
@@ -484,6 +494,7 @@ public class OptimizationEngine {
             DistanceMatrixResult matrix,
             LocalDateTime departure,
             boolean returnToStart,
+            boolean hasDestination,
             List<CandidatePath> result) {
 
         LocalDateTime currentTime = departure;
@@ -516,6 +527,12 @@ public class OptimizationEngine {
         if (returnToStart) {
             long travelTime = matrix.getDurations()[currentNode][0];
             long travelDist = matrix.getDistances()[currentNode][0];
+            currentTime = currentTime.plusSeconds(travelTime);
+            totalDistance += travelDist;
+        } else if (hasDestination) {
+            int destIndex = stops.size() + 1;
+            long travelTime = matrix.getDurations()[currentNode][destIndex];
+            long travelDist = matrix.getDistances()[currentNode][destIndex];
             currentTime = currentTime.plusSeconds(travelTime);
             totalDistance += travelDist;
         }

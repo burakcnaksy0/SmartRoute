@@ -45,4 +45,12 @@ public class PlacesController {
     public ResponseEntity<String> reverseGeocode(@RequestParam double lat, @RequestParam double lng) {
         return ResponseEntity.ok(placesService.reverseGeocode(lat, lng));
     }
+
+    @GetMapping("/recommendations")
+    public ResponseEntity<List<com.smartroute.service.places.GooglePlaceResult>> getRecommendations(
+            @RequestParam double lat,
+            @RequestParam double lng,
+            @RequestParam(defaultValue = "2000") int radius) {
+        return ResponseEntity.ok(placesService.getRecommendations(lat, lng, radius));
+    }
 }

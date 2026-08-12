@@ -105,7 +105,7 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
     } catch (e: any) {
       const msg =
         e?.response?.data?.error ||
-        e?.message ||
+        e?.userMessage ||
         'Doğal dil işleme başarısız oldu. Lütfen tekrar deneyin veya manuel form kullanın.';
       set({ nlpError: msg, isNlpParsing: false });
       return false;
@@ -124,7 +124,7 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
       return journey;
     } catch (e: any) {
       const msg =
-        e?.response?.data?.error || e?.message || 'Yolculuk oluşturulamadı.';
+        e?.userMessage || e?.response?.data?.error || 'Yolculuk oluşturulamadı.';
       set({ error: msg, isLoading: false });
       return null;
     }
@@ -138,7 +138,7 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
       return true;
     } catch (e: any) {
       const responseData = e?.response?.data;
-      const msg = responseData?.error || e?.message || 'Optimizasyon başarısız oldu.';
+      const msg = e?.userMessage || responseData?.error || 'Optimizasyon başarısız oldu.';
       
       // If it is an infeasible plan error with conflicting stops, capture them
       if (responseData?.errorCode === 'INFEASIBLE_PLAN' && responseData?.conflictingStops) {
@@ -162,7 +162,7 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
       return true;
     } catch (e: any) {
       const msg =
-        e?.response?.data?.error || e?.message || 'Çıkış önerileri yüklenemedi.';
+        e?.userMessage || e?.response?.data?.error || 'Çıkış önerileri yüklenemedi.';
       set({ suggestionsError: msg, isLoadingSuggestions: false });
       return false;
     }
@@ -317,7 +317,7 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
       });
       return response.replanSuggested;
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Yeniden planlama başarısız oldu.';
+      const msg = e?.userMessage || e?.response?.data?.error || 'Yeniden planlama başarısız oldu.';
       set({ error: msg, isReplanLoading: false });
       return false;
     }
@@ -344,7 +344,7 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
       });
       return true;
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Yeniden planlama onaylanamadı.';
+      const msg = e?.userMessage || e?.response?.data?.error || 'Yeniden planlama onaylanamadı.';
       set({ error: msg, isReplanLoading: false });
       return false;
     }

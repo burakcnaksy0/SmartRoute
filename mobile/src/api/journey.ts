@@ -91,6 +91,9 @@ export interface Journey {
   startLat: number;
   startLng: number;
   startAddressText?: string;
+  destinationLat?: number;
+  destinationLng?: number;
+  destinationAddressText?: string;
   plannedDepartureTime?: string;
   deadlineTime?: string;
   stops: JourneyStop[];
@@ -183,6 +186,7 @@ export const journeyApi = {
       returnToStart: boolean;
       stops?: JourneyStopRequest[];
       startLocation?: { lat: number; lng: number };
+      destination?: { lat: number; lng: number };
       preferences?: { profileType: string; avoidTolls: boolean; avoidHighways: boolean };
       vehicleType?: string;
     }

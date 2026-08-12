@@ -37,7 +37,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         isLoading: false,
       });
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Ayarlar yüklenemedi.';
+      const msg = e?.userMessage || e?.response?.data?.error || 'Ayarlar yüklenemedi.';
       set({ error: msg, isLoading: false });
     }
   },
@@ -55,7 +55,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         isLoading: false,
       });
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Ayarlar güncellenemedi.';
+      const msg = e?.userMessage || e?.response?.data?.error || 'Ayarlar güncellenemedi.';
       set({ error: msg, isLoading: false });
     }
   },

@@ -75,6 +75,7 @@ public class OptimizeRequest {
     }
 
     private GeoPointDto startLocation;
+    private GeoPointDto destination;
     private List<JourneyStopRequest> stops;
     private boolean returnToStart;
     private PreferencesDto preferences;
@@ -91,6 +92,14 @@ public class OptimizeRequest {
 
     public void setStartLocation(GeoPointDto startLocation) {
         this.startLocation = startLocation;
+    }
+
+    public GeoPointDto getDestination() {
+        return destination;
+    }
+
+    public void setDestination(GeoPointDto destination) {
+        this.destination = destination;
     }
 
     public List<JourneyStopRequest> getStops() {

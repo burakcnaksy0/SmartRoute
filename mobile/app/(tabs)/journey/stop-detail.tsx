@@ -19,6 +19,8 @@ import { Colors, Spacing, Rounded, Shadow, Typography, TabBarHeight } from '@/co
 import { ScreenHeader } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { placesApi, NearbyParkingResult } from '@/api/places';
+import MapLocationView from '@/components/MapLocationView';
+import MapLocationPickerModal, { PickedLocationResult } from '@/components/MapLocationPickerModal';
 
 const C = Colors.light;
 
@@ -57,9 +59,9 @@ export default function StopDetailScreen() {
   const existingStop = existingIndex >= 0 ? draftStops?.[existingIndex] : undefined;
 
   // Form states
-  const [placeName] = useState(existingStop?.placeName ?? params.placeName ?? 'Seçilen Konum');
-  const [lat] = useState(existingStop?.lat ?? parseFloat(params.lat ?? '41.0082'));
-  const [lng] = useState(existingStop?.lng ?? parseFloat(params.lng ?? '28.9784'));
+  const [placeName, setPlaceName] = useState(existingStop?.placeName ?? params.placeName ?? 'Seçilen Konum');
+  const [lat, setLat] = useState(existingStop?.lat ?? parseFloat(params.lat ?? '41.0082'));
+  const [lng, setLng] = useState(existingStop?.lng ?? parseFloat(params.lng ?? '28.9784'));
   const [duration, setDuration] = useState<number>(existingStop?.visitDurationMinutes ?? 30);
   const [priority, setPriority] = useState<Priority>(
     (existingStop?.priority as Priority) ?? 'normal'
@@ -80,6 +82,14 @@ export default function StopDetailScreen() {
   const [isLoadingParking, setIsLoadingParking] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Picker modal state
+  const [pickerModalVisible, setPickerModalVisible] = useState(false);
+  const handlePickerSelect = (result: PickedLocationResult) => {
+    setLat(result.latitude);
+    setLng(result.longitude);
+    if (result.placeName) setPlaceName(result.placeName);
+  };
 
   // Fetch nearby parking options from backend
   useEffect(() => {
@@ -188,6 +198,36 @@ export default function StopDetailScreen() {
             <Text style={styles.placeCoords}>
               {lat.toFixed(4)}° N, {lng.toFixed(4)}° E
             </Text>
+          </View>
+        </View>
+
+        {/* Mini Map Preview */}
+        <View style={styles.sectionCard}>
+          <View style={styles.mapHeaderRow}>
+            <Text style={styles.cardSectionTitle}>KONUM ÖNİZLEME</Text>
+            <TouchableOpacity 
+              style={styles.changeLocationBtn} 
+              activeOpacity={0.8}
+              onPress={() => setPickerModalVisible(true)}
+            >
+              <MaterialIcons name="edit-location" size={16} color={C.primary} />
+              <Text style={styles.changeLocationText}>Haritada Değiştir</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.miniMapWrapper}>
+            <MapLocationView
+              height={140}
+              initialLocation={{ latitude: lat, longitude: lng }}
+              markers={[{
+                id: 'current_stop',
+                latitude: lat,
+                longitude: lng,
+                title: placeName,
+                type: 'stop'
+              }]}
+              expandable={true}
+              showControls={false}
+            />
           </View>
         </View>
 
@@ -463,6 +503,15 @@ export default function StopDetailScreen() {
           />
         )}
       </View>
+
+      <MapLocationPickerModal
+        visible={pickerModalVisible}
+        onClose={() => setPickerModalVisible(false)}
+        mode="stop"
+        title="Durağın Konumunu Değiştir"
+        initialCoordinates={{ latitude: lat, longitude: lng }}
+        onSelectLocation={handlePickerSelect}
+      />
     </SafeAreaView>
   );
 }
@@ -519,6 +568,32 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: C.outline,
     letterSpacing: 0.8,
+  },
+  mapHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  changeLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.primaryFixed,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Rounded.full,
+    gap: 4,
+  },
+  changeLocationText: {
+    ...Typography.caption,
+    color: C.primary,
+    fontWeight: '600',
+  },
+  miniMapWrapper: {
+    borderRadius: Rounded.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: C.outlineVariant,
   },
   stepperRow: {
     flexDirection: 'row',

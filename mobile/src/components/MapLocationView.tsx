@@ -48,6 +48,7 @@ export interface MapLocationViewProps {
   onLocationChange?: (coords: Coordinates, address?: string) => void;
   onMarkerPress?: (markerId: string) => void;
   onMapPress?: (coords: Coordinates) => void;
+  autoCenterOnInitialLocation?: boolean;
 }
 
 // Modern desaturated map style matching Intelligent Mobility UI
@@ -122,6 +123,7 @@ export default function MapLocationView({
   onLocationChange,
   onMarkerPress,
   onMapPress,
+  autoCenterOnInitialLocation = false,
 }: MapLocationViewProps) {
   const mapRef = useRef<MapView | null>(null);
   const fullMapRef = useRef<MapView | null>(null);
@@ -204,8 +206,8 @@ export default function MapLocationView({
           setIsLoading(false);
           onLocationChange?.(coords);
 
-          // Animate camera to user location if no custom markers are preset
-          if (markers.length === 0 && mapRef.current) {
+          // Animate camera to user location if no custom markers are preset or forced by prop
+          if ((markers.length === 0 || autoCenterOnInitialLocation) && mapRef.current) {
             mapRef.current.animateToRegion(
               {
                 latitude: coords.latitude,
@@ -322,7 +324,7 @@ export default function MapLocationView({
     const isDestination = m.type === 'destination';
     const seq = m.sequenceIndex !== undefined ? m.sequenceIndex + 1 : index + 1;
 
-    let bgColor = C.primary;
+    let bgColor: string = C.primary;
     let iconName: keyof typeof MaterialIcons.glyphMap = 'place';
     let label = String(seq);
 
