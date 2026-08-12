@@ -140,11 +140,11 @@ API key ve konfigürasyon değerleri environment variable üzerinden yönetilmel
 
 ```env
 # OpenRouteService
-ORS_API_KEY=YOUR_ORS_API_KEY_HERE
+ORS_API_KEY=eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjJjYWQzY2NkYzlhMDRmY2JiZTE0ZTZjZGE3YjQzMjQwIiwiaCI6Im11cm11cjY0In0=
 ORS_BASE_URL=https://api.openrouteservice.org
 
 # Geoapify
-GEOAPIFY_API_KEY=YOUR_GEOAPIFY_API_KEY_HERE
+GEOAPIFY_API_KEY=08cefc503e144949bbe79fa3512c591b
 GEOAPIFY_BASE_URL=https://api.geoapify.com
 
 # Overpass
