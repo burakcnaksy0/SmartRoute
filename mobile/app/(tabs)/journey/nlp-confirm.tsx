@@ -519,7 +519,9 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   confirmBtn: {
-    height: 56,
+    minHeight: 56,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: Rounded.xl,
     flexDirection: 'row',
     alignItems: 'center',
@@ -537,9 +539,13 @@ const styles = StyleSheet.create({
   confirmBtnText: {
     fontSize: 17,
     fontWeight: '600',
+    flexShrink: 1,
+    textAlign: 'center',
   },
   rejectBtn: {
-    height: 56,
+    minHeight: 56,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: Rounded.xl,
     borderWidth: 1.5,
     flexDirection: 'row',
@@ -550,6 +556,8 @@ const styles = StyleSheet.create({
   rejectBtnText: {
     fontSize: 17,
     fontWeight: '600',
+    flexShrink: 1,
+    textAlign: 'center',
   },
   manualLink: {
     alignItems: 'center',

@@ -10,7 +10,7 @@ import {
   Modal,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import MapView, { Marker, Polyline, Callout, PROVIDER_DEFAULT } from 'react-native-maps';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -127,6 +127,7 @@ export default function MapLocationView({
 }: MapLocationViewProps) {
   const mapRef = useRef<MapView | null>(null);
   const fullMapRef = useRef<MapView | null>(null);
+  const insets = useSafeAreaInsets();
 
   // Default to Istanbul / Turkey center if GPS is fetching
   const [currentLocation, setCurrentLocation] = useState<Coordinates>(
@@ -571,10 +572,10 @@ export default function MapLocationView({
       <Modal
         visible={isExpanded}
         animationType="slide"
-        presentationStyle="fullScreen"
+        presentationStyle="pageSheet"
         onRequestClose={() => setIsExpanded(false)}
       >
-        <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
+        <View style={[styles.modalSafeArea, { paddingTop: Platform.OS === 'android' ? insets.top : 0, paddingBottom: Math.max(0, insets.bottom) }]}>
           {/* Fullscreen Map View */}
           <View style={styles.modalMapWrapper}>
             {Platform.OS !== 'web' ? (
@@ -775,7 +776,7 @@ export default function MapLocationView({
               </View>
             )}
           </View>
-        </SafeAreaView>
+        </View>
       </Modal>
     </View>
   );

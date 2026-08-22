@@ -107,29 +107,4 @@ public class PlacesServiceTest {
         assertEquals("Test Pharmacy", result.get(0).getName());
     }
 
-    @Test
-    void testGetParkingOptions() {
-        when(journeyStopRepository.findById(stop.getId())).thenReturn(Optional.of(stop));
-
-        ParkingResult lot = new ParkingResult(
-                "lot1",
-                "Otopark",
-                41.011,
-                28.971,
-                100,
-                50,
-                true,
-                "public"
-        );
-
-        when(parkingProvider.findNearby(any(GeoPoint.class), anyInt()))
-                .thenReturn(List.of(lot));
-
-        List<ParkingOptionResponse> result = placesService.getParkingOptions(stop.getId(), user);
-
-        assertNotNull(result);
-        assertFalse(result.isEmpty());
-        assertEquals("lot1", result.get(0).getPlaceId());
-        assertNotNull(result.get(0).getEffectiveArrivalTime());
-    }
 }

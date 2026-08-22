@@ -8,8 +8,8 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  Alert,
   Animated,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -299,7 +299,11 @@ export default function NewStopScreen() {
         }
       />
 
-      <ScrollView
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -558,6 +562,7 @@ export default function NewStopScreen() {
           onPress={handleOptimizeAndBuild}
         />
       </View>
+      </KeyboardAvoidingView>
 
       <MapLocationPickerModal
         visible={pickerModalVisible}

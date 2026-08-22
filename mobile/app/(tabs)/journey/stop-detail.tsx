@@ -9,6 +9,7 @@ import {
   Switch,
   Platform,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -162,7 +163,11 @@ export default function StopDetailScreen() {
       <StatusBar style="dark" />
       <ScreenHeader title="Durak Detayları" />
 
-      <ScrollView
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -386,8 +391,9 @@ export default function StopDetailScreen() {
             labelStyle={{ color: C.error }}
             style={{ borderColor: C.error }}
           />
-        )}
-      </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
 
       <MapLocationPickerModal
         visible={pickerModalVisible}

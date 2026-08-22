@@ -20,13 +20,13 @@ public class HuggingFaceLlmProvider implements LlmProvider {
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
 
-    @Value("${huggingface.api.key}")
+    @Value("${huggingface.api.key:}")
     private String hfApiKey;
 
-    @Value("${huggingface.api.baseUrl}")
+    @Value("${huggingface.api.baseUrl:https://api-inference.huggingface.co}")
     private String hfBaseUrl;
 
-    @Value("${huggingface.api.model}")
+    @Value("${huggingface.api.model:meta-llama/Llama-3.1-8B-Instruct}")
     private String hfModel;
 
     public HuggingFaceLlmProvider(ObjectMapper objectMapper) {

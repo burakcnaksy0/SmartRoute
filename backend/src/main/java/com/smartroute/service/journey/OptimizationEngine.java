@@ -90,6 +90,14 @@ public class OptimizationEngine {
         return feasiblePaths;
     }
 
+    public List<CandidatePath> findFeasiblePaths(
+            List<JourneyStop> stops,
+            DistanceMatrixResult matrix,
+            LocalDateTime plannedDepartureTime,
+            boolean returnToStart) {
+        return findFeasiblePaths(stops, matrix, plannedDepartureTime, returnToStart, false);
+    }
+
     /**
      * From the list of feasible paths, find the best single permutation for a given profile.
      * Uses the multi-objective scoring function described in Section 11.3.

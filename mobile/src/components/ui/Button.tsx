@@ -60,10 +60,10 @@ const variantStyles: Record<ButtonVariant, { container: ViewStyle; label: TextSt
   },
 };
 
-const sizeStyles: Record<ButtonSize, { height: number; paddingH: number; radius: number; fontSize: number }> = {
-  sm: { height: 40, paddingH: 16, radius: Rounded.md, fontSize: 14 },
-  md: { height: 52, paddingH: 20, radius: Rounded.lg, fontSize: 16 },
-  lg: { height: 58, paddingH: 24, radius: Rounded.xl, fontSize: 16 },
+const sizeStyles: Record<ButtonSize, { minHeight: number; paddingH: number; paddingV: number; radius: number; fontSize: number }> = {
+  sm: { minHeight: 40, paddingH: 16, paddingV: 8, radius: Rounded.md, fontSize: 14 },
+  md: { minHeight: 52, paddingH: 20, paddingV: 12, radius: Rounded.lg, fontSize: 16 },
+  lg: { minHeight: 58, paddingH: 24, paddingV: 16, radius: Rounded.xl, fontSize: 16 },
 };
 
 export function Button({
@@ -117,8 +117,9 @@ export function Button({
           styles.base,
           vStyle.container,
           {
-            height: sStyle.height,
+            minHeight: sStyle.minHeight,
             paddingHorizontal: sStyle.paddingH,
+            paddingVertical: sStyle.paddingV,
             borderRadius: sStyle.radius,
           },
           fullWidth && styles.fullWidth,
@@ -166,6 +167,8 @@ const styles = StyleSheet.create({
   label: {
     fontWeight: '600',
     letterSpacing: -0.1,
+    textAlign: 'center',
+    flexShrink: 1,
   },
   disabled: {
     opacity: 0.45,

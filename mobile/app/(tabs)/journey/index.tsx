@@ -10,6 +10,7 @@ import {
   Animated,
   Platform,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -344,11 +345,15 @@ export default function JourneyIndexScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* Title Header */}
         <View style={styles.titleSection}>
           <Text style={styles.pageTitle}>Yolculuk</Text>
@@ -649,6 +654,7 @@ export default function JourneyIndexScreen() {
           onPress={handleOptimizeNow}
         />
       </View>
+      </KeyboardAvoidingView>
 
       {/* Interactive Map Location Picker Modal */}
       <MapLocationPickerModal

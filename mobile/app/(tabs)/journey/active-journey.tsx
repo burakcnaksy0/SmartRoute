@@ -485,7 +485,8 @@ const styles = StyleSheet.create({
   },
   navActionBtn: {
     flex: 1,
-    height: 48,
+    minHeight: 48,
+    paddingVertical: 10,
     borderRadius: Rounded.lg,
     flexDirection: 'row',
     alignItems: 'center',
@@ -496,6 +497,8 @@ const styles = StyleSheet.create({
   navActionText: {
     ...Typography.buttonSmall,
     color: C.primary,
+    flexShrink: 1,
+    textAlign: 'center',
   },
   hudActionsRow: {
     marginTop: Spacing.xs,

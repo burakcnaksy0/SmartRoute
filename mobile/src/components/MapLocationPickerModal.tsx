@@ -11,9 +11,9 @@ import {
   Animated,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import MapView, { Marker, Circle, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Rounded, Shadow, Spacing, Typography } from '@/constants/theme';
 import { placesApi, PlaceResult } from '@/api/places';
@@ -56,6 +56,7 @@ export default function MapLocationPickerModal({
   existingMarkers = [],
 }: MapLocationPickerModalProps) {
   const mapRef = useRef<MapView | null>(null);
+  const insets = useSafeAreaInsets();
 
   // Selected Pin Coordinates
   const [selectedCoords, setSelectedCoords] = useState<{ latitude: number; longitude: number }>(
@@ -326,10 +327,10 @@ export default function MapLocationPickerModal({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="fullScreen"
+      presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <View style={[styles.safeArea, { paddingTop: Platform.OS === 'android' ? insets.top : 0 }]}>
         {/* Top Floating Search & Header Bar */}
         <View style={styles.topContainer}>
           <View style={styles.headerBar}>
@@ -547,7 +548,7 @@ export default function MapLocationPickerModal({
         </View>
 
         {/* Bottom Location Confirmation Sheet */}
-        <View style={styles.bottomCard}>
+        <View style={[styles.bottomCard, { paddingBottom: Math.max(Spacing.md, insets.bottom) }]}>
           <View style={styles.locationHeaderRow}>
             <View style={[styles.locationIconCircle, { backgroundColor: getMarkerColor() + '20' }]}>
               <MaterialIcons name={getMarkerIcon()} size={22} color={getMarkerColor()} />
@@ -611,7 +612,7 @@ export default function MapLocationPickerModal({
             </TouchableOpacity>
           </View>
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -866,10 +867,13 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   confirmBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 50,
+    minHeight: 50,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
     borderRadius: Rounded.xl,
     gap: Spacing.sm,
     ...Shadow.primary,
@@ -878,6 +882,8 @@ const styles = StyleSheet.create({
     ...Typography.button,
     color: '#FFFFFF',
     fontWeight: '700',
+    flexShrink: 1,
+    textAlign: 'center',
   },
   // Web Fallback
   webFallback: {
