@@ -2,14 +2,7 @@ package com.smartroute.routeplanning.infrastructure.adapter.out.persistence;
 
 import com.smartroute.domain.Journey;
 import com.smartroute.domain.JourneyStop;
-import com.smartroute.routeplanning.domain.model.Coordinates;
-import com.smartroute.routeplanning.domain.model.Destination;
-import com.smartroute.routeplanning.domain.model.Location;
-import com.smartroute.routeplanning.domain.model.RoutePlan;
-import com.smartroute.routeplanning.domain.model.TimeWindow;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
+import com.smartroute.routeplanning.domain.model.*;
 
 /**
  * Maps between the core domain Aggregate (RoutePlan) and the JPA Entity (Journey).
@@ -45,8 +38,8 @@ public class RoutePlanMapper {
 
         for (JourneyStop stopEntity : journey.getStops()) {
             Location loc = new Location(
-                    new Coordinates(stopEntity.getLatitude(), stopEntity.getLongitude()),
-                    stopEntity.getAddressText()
+                    new Coordinates(stopEntity.getLat(), stopEntity.getLng()),
+                    stopEntity.getPlaceName()
             );
             TimeWindow tw = new TimeWindow(stopEntity.getTimeWindowStart(), stopEntity.getTimeWindowEnd());
             
@@ -54,7 +47,7 @@ public class RoutePlanMapper {
                     stopEntity.getId(),
                     loc,
                     tw,
-                    stopEntity.getDurationMinutes() != null ? stopEntity.getDurationMinutes() : 0,
+                    stopEntity.getVisitDurationMinutes() != null ? stopEntity.getVisitDurationMinutes() : 0,
                     true
             );
             routePlan.addDestination(dest);

@@ -68,12 +68,21 @@ export default function JourneyIndexScreen() {
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 450, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
     ]).start();
+
+    // Infinite pulse animation for live indicator
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.5, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
   }, []);
 
   // Sync with draftStartLocation if updated externally
@@ -396,7 +405,7 @@ export default function JourneyIndexScreen() {
           {/* Floating Pill on Map */}
           <View style={styles.mapPillOverlay}>
             <View style={styles.mapPill}>
-              <View style={styles.liveIndicator} />
+              <Animated.View style={[styles.liveIndicator, { transform: [{ scale: pulseAnim }], opacity: pulseAnim.interpolate({ inputRange: [1, 1.5], outputRange: [1, 0.4] }) }]} />
               <Text style={styles.mapPillText}>
                 {draftStops.length > 0
                   ? `${draftStops.length} Durak Planlandı`

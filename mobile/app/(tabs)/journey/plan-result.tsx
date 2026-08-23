@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Platform,
   Linking,
   Alert,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -40,6 +41,89 @@ function formatDistance(meters: number): string {
 function formatCost(amount: number | null | undefined): string {
   if (amount == null || isNaN(amount)) return '₺0,00';
   return `₺${amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function AnimatedPlanCard({ plan, isSelected, onSelect, index }: any) {
+  const animVal = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(animVal, {
+      toValue: 1,
+      duration: 500,
+      delay: index * 150, // Staggered delay based on index
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const translateY = animVal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [20, 0], // Slide up
+  });
+
+  return (
+    <Animated.View style={{ opacity: animVal, transform: [{ translateY }] }}>
+      <TouchableOpacity
+        style={[styles.planCard, isSelected && styles.planCardActive]}
+        activeOpacity={0.85}
+        onPress={() => onSelect(plan.id)}
+      >
+        <View style={styles.planCardHeader}>
+          <View style={styles.planHeaderLeft}>
+            <View style={[styles.planIconBg, { backgroundColor: plan.isRecommended ? C.secondaryContainer : C.surfaceLow }]}>
+              <MaterialIcons name={plan.icon} size={20} color={plan.color} />
+            </View>
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.planTitle}>{plan.title}</Text>
+                {plan.isRecommended && (
+                  <Badge label="ÖNERİLEN" variant="secondary" size="sm" />
+                )}
+              </View>
+              <Text style={styles.planSub}>{plan.subtitle}</Text>
+            </View>
+          </View>
+          <View style={styles.radioOuter}>
+            {isSelected && <View style={styles.radioInner} />}
+          </View>
+        </View>
+
+        <View style={styles.metricsGrid}>
+          <View style={styles.metricItem}>
+            <Text style={styles.metricLabel}>Süre</Text>
+            <Text style={styles.metricVal}>{formatDuration(plan.duration)}</Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricItem}>
+            <Text style={styles.metricLabel}>Mesafe</Text>
+            <Text style={styles.metricVal}>{formatDistance(plan.distance)}</Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricItem}>
+            <Text style={styles.metricLabel}>Tahmini Masraf</Text>
+            <Text style={[styles.metricVal, { color: C.secondary }]}>{formatCost(plan.cost)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.stressContainer}>
+          <View style={styles.stressLabelRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <MaterialIcons name="psychology" size={14} color={C.textSecondary} />
+              <Text style={styles.stressLabel}>Sürüş Stresi</Text>
+            </View>
+            <Text style={[styles.stressValue, { color: plan.stressColor }]}>{plan.stressLevel}</Text>
+          </View>
+          <View style={styles.stressTrack}>
+            <View style={[styles.stressFill, { width: `${plan.stressPct}%`, backgroundColor: plan.stressColor }]} />
+          </View>
+        </View>
+
+        <View style={styles.noteRow}>
+          <MaterialIcons name="info-outline" size={14} color={C.textSecondary} />
+          <Text style={styles.noteText}>{plan.note}</Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
 }
 
 export default function PlanResultScreen() {
@@ -201,94 +285,19 @@ export default function PlanResultScreen() {
         {/* Multi-Criteria Route Comparison Cards */}
         <Text style={styles.sectionHeading}>ROTA SEÇENEKLERİ</Text>
         <View style={styles.plansContainer}>
-          {planOptions.map((plan) => {
+          {planOptions.map((plan, idx) => {
             const isSelected =
               (selectedPlanId === plan.id) ||
               (plan.isRecommended && (!selectedPlanId || selectedPlanId === 'recommended'));
 
             return (
-              <TouchableOpacity
+              <AnimatedPlanCard
                 key={plan.id}
-                style={[
-                  styles.planCard,
-                  isSelected && styles.planCardActive,
-                ]}
-                activeOpacity={0.85}
-                onPress={() => setSelectedPlanId(plan.id)}
-              >
-                <View style={styles.planCardHeader}>
-                  <View style={styles.planHeaderLeft}>
-                    <View
-                      style={[
-                        styles.planIconBg,
-                        { backgroundColor: plan.isRecommended ? C.secondaryContainer : C.surfaceLow },
-                      ]}
-                    >
-                      <MaterialIcons name={plan.icon} size={20} color={plan.color} />
-                    </View>
-                    <View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={styles.planTitle}>{plan.title}</Text>
-                        {plan.isRecommended && (
-                          <Badge label="ÖNERİLEN" variant="secondary" size="sm" />
-                        )}
-                      </View>
-                      <Text style={styles.planSub}>{plan.subtitle}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.radioOuter}>
-                    {isSelected && <View style={styles.radioInner} />}
-                  </View>
-                </View>
-
-                {/* Metrics Grid */}
-                <View style={styles.metricsGrid}>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Süre</Text>
-                    <Text style={styles.metricVal}>{formatDuration(plan.duration)}</Text>
-                  </View>
-                  <View style={styles.metricDivider} />
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Mesafe</Text>
-                    <Text style={styles.metricVal}>{formatDistance(plan.distance)}</Text>
-                  </View>
-                  <View style={styles.metricDivider} />
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Tahmini Masraf</Text>
-                    <Text style={[styles.metricVal, { color: C.secondary }]}>
-                      {formatCost(plan.cost)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Stress Level Indicator matching stitch design */}
-                <View style={styles.stressContainer}>
-                  <View style={styles.stressLabelRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <MaterialIcons name="psychology" size={14} color={C.textSecondary} />
-                      <Text style={styles.stressLabel}>Sürüş Stresi</Text>
-                    </View>
-                    <Text style={[styles.stressValue, { color: plan.stressColor }]}>
-                      {plan.stressLevel}
-                    </Text>
-                  </View>
-                  <View style={styles.stressTrack}>
-                    <View
-                      style={[
-                        styles.stressFill,
-                        { width: `${plan.stressPct}%`, backgroundColor: plan.stressColor },
-                      ]}
-                    />
-                  </View>
-                </View>
-
-                {/* Note */}
-                <View style={styles.noteRow}>
-                  <MaterialIcons name="info-outline" size={14} color={C.textSecondary} />
-                  <Text style={styles.noteText}>{plan.note}</Text>
-                </View>
-              </TouchableOpacity>
+                plan={plan}
+                isSelected={isSelected}
+                onSelect={setSelectedPlanId}
+                index={idx}
+              />
             );
           })}
         </View>

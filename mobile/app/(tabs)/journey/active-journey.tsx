@@ -26,6 +26,75 @@ import MapLocationView from '@/components/MapLocationView';
 
 const C = Colors.light;
 
+function TimelineItemNode({
+  stop,
+  isCompleted,
+  isCurrent,
+  isLast,
+}: {
+  stop: any;
+  isCompleted: boolean;
+  isCurrent: boolean;
+  isLast: boolean;
+}) {
+  const animVal = useRef(new Animated.Value(isCompleted ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(animVal, {
+      toValue: isCompleted ? 1 : 0,
+      duration: 500,
+      useNativeDriver: false,
+    }).start();
+  }, [isCompleted]);
+
+  const opacity = animVal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0.45],
+  });
+
+  const scale = animVal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0.95],
+  });
+
+  return (
+    <Animated.View style={[styles.timelineItem, { opacity, transform: [{ scale }] }]}>
+      <View style={styles.indicatorCol}>
+        <View
+          style={[
+            styles.timelineDot,
+            isCompleted && styles.timelineDotDone,
+            isCurrent && styles.timelineDotCurrent,
+          ]}
+        >
+          {isCompleted && (
+            <MaterialIcons name="done" size={10} color={C.onSecondary} />
+          )}
+        </View>
+        {!isLast && (
+          <View style={[styles.timelineLine, isCompleted && styles.timelineLineDone]} />
+        )}
+      </View>
+      <View style={styles.timelineContent}>
+        <Text
+          style={[
+            styles.timelineTitle,
+            isCompleted && styles.timelineTitleDone,
+            isCurrent && styles.timelineTitleCurrent,
+          ]}
+        >
+          {stop.placeName}
+        </Text>
+        <Text style={styles.timelineSub}>
+          {isCompleted
+            ? 'Tamamlandı'
+            : `${stop.visitDurationMinutes} dk · ${stop.priority === 'critical' ? 'Kritik Öncelik' : 'Normal'}`}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+
 export default function ActiveJourneyScreen() {
   const router = useRouter();
   const {
@@ -288,42 +357,13 @@ export default function ActiveJourneyScreen() {
               const isLast = idx === stopsSorted.length - 1;
 
               return (
-                <View key={stop.id} style={styles.timelineItem}>
-                  <View style={styles.indicatorCol}>
-                    <View
-                      style={[
-                        styles.timelineDot,
-                        isCompleted && styles.timelineDotDone,
-                        isCurrent && styles.timelineDotCurrent,
-                      ]}
-                    >
-                      {isCompleted && (
-                        <MaterialIcons name="done" size={10} color={C.onSecondary} />
-                      )}
-                    </View>
-                    {!isLast && (
-                      <View
-                        style={[styles.timelineLine, isCompleted && styles.timelineLineDone]}
-                      />
-                    )}
-                  </View>
-                  <View style={styles.timelineContent}>
-                    <Text
-                      style={[
-                        styles.timelineTitle,
-                        isCompleted && styles.timelineTitleDone,
-                        isCurrent && styles.timelineTitleCurrent,
-                      ]}
-                    >
-                      {stop.placeName}
-                    </Text>
-                    <Text style={styles.timelineSub}>
-                      {isCompleted
-                        ? 'Tamamlandı'
-                        : `${stop.visitDurationMinutes} dk · ${stop.priority === 'critical' ? 'Kritik Öncelik' : 'Normal'}`}
-                    </Text>
-                  </View>
-                </View>
+                <TimelineItemNode
+                  key={stop.id}
+                  stop={stop}
+                  isCompleted={isCompleted}
+                  isCurrent={isCurrent}
+                  isLast={isLast}
+                />
               );
             })}
           </View>
@@ -453,6 +493,11 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: C.primary,
     borderRadius: Rounded.full,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 3,
   },
   stopCard: {
     backgroundColor: C.surfaceLow,

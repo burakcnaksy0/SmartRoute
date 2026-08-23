@@ -44,6 +44,8 @@ function statusLabel(status: string): { label: string; color: string } {
   }
 }
 
+import Swipeable from 'react-native-gesture-handler/Swipeable';
+
 function JourneyCard({
   journey,
   onDelete,
@@ -57,48 +59,60 @@ function JourneyCard({
   const selectedPlan = journey.plans?.find(p => p.isSelected) ?? journey.plans?.[0];
   const distMeters = selectedPlan?.totalDistanceMeters;
 
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardTop}>
-        <View style={styles.cardLeft}>
-          <View style={[styles.statusDot, { backgroundColor: color }]} />
-          <Text style={styles.cardStatus}>{label}</Text>
-          <Text style={styles.dotSeparator}>•</Text>
-          <Text style={styles.cardDate}>{formatDate(journey.createdAt)}</Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => onDelete(journey.id, journey.startAddressText)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          disabled={isDeleting}
-          activeOpacity={0.7}
-        >
-          {isDeleting ? (
-            <ActivityIndicator size="small" color={C.error} />
-          ) : (
-            <MaterialIcons name="delete-outline" size={20} color={C.error} />
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.cardTitle} numberOfLines={1}>
-        {journey.startAddressText ?? `${journey.startLat?.toFixed(4)}, ${journey.startLng?.toFixed(4)}`}
-      </Text>
-
-      <View style={styles.cardMeta}>
-        <View style={styles.metaChip}>
-          <MaterialIcons name="place" size={14} color={C.outline} />
-          <Text style={styles.metaText}>{journey.stops?.length ?? 0} durak</Text>
-        </View>
-        {distMeters != null && (
-          <View style={styles.metaChip}>
-            <MaterialIcons name="straighten" size={14} color={C.outline} />
-            <Text style={styles.metaText}>{formatDist(distMeters)}</Text>
-          </View>
+  const renderRightActions = (progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => {
+    const scale = dragX.interpolate({
+      inputRange: [-80, 0],
+      outputRange: [1, 0],
+      extrapolate: 'clamp',
+    });
+    return (
+      <TouchableOpacity
+        style={styles.deleteAction}
+        onPress={() => onDelete(journey.id, journey.startAddressText)}
+        disabled={isDeleting}
+      >
+        {isDeleting ? (
+          <ActivityIndicator size="small" color="#FFF" />
+        ) : (
+          <Animated.View style={{ transform: [{ scale }] }}>
+            <MaterialIcons name="delete" size={28} color="#FFF" />
+          </Animated.View>
         )}
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <Swipeable renderRightActions={renderRightActions} containerStyle={styles.swipeableContainer}>
+      <View style={[styles.card, styles.glassCard]}>
+        <View style={styles.cardTop}>
+          <View style={styles.cardLeft}>
+            <View style={[styles.statusDot, { backgroundColor: color }]} />
+            <Text style={styles.cardStatus}>{label}</Text>
+            <Text style={styles.dotSeparator}>•</Text>
+            <Text style={styles.cardDate}>{formatDate(journey.createdAt)}</Text>
+          </View>
+          <MaterialIcons name="swipe-left" size={16} color={C.outlineVariant} />
+        </View>
+
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {journey.startAddressText ?? `${journey.startLat?.toFixed(4)}, ${journey.startLng?.toFixed(4)}`}
+        </Text>
+
+        <View style={styles.cardMeta}>
+          <View style={styles.metaChip}>
+            <MaterialIcons name="place" size={14} color={C.outline} />
+            <Text style={styles.metaText}>{journey.stops?.length ?? 0} durak</Text>
+          </View>
+          {distMeters != null && (
+            <View style={styles.metaChip}>
+              <MaterialIcons name="straighten" size={14} color={C.outline} />
+              <Text style={styles.metaText}>{formatDist(distMeters)}</Text>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
+    </Swipeable>
   );
 }
 
@@ -392,5 +406,23 @@ const styles = StyleSheet.create({
   metaText: {
     ...Typography.caption,
     color: C.outline,
+  },
+  // Swipe and Glass styles
+  swipeableContainer: {
+    marginBottom: Spacing.sm,
+    borderRadius: Rounded.xl,
+    overflow: 'hidden',
+  },
+  glassCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  deleteAction: {
+    backgroundColor: C.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    height: '100%',
   },
 });

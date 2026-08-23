@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Configuration;
 public class RoutePlanningConfig {
 
     @Bean
-    public OptimizationEngine optimizationEngine() {
+    public OptimizationEngine domainOptimizationEngine() {
         // OptimizationEngine has no dependencies, it's pure logic
         return new OptimizationEngine();
     }
@@ -25,13 +25,13 @@ public class RoutePlanningConfig {
     public OptimizeRoutePlanUseCase optimizeRoutePlanUseCase(
             RoutePlanRepository routePlanRepository,
             RoutingProvider routingProvider,
-            OptimizationEngine optimizationEngine) {
+            OptimizationEngine domainOptimizationEngine) {
         
         // Wire the Application Service with its Ports and Domain Services
         return new RoutePlanOptimizerService(
                 routePlanRepository,
                 routingProvider,
-                optimizationEngine
+                domainOptimizationEngine
         );
     }
 }
