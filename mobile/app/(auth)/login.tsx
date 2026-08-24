@@ -9,6 +9,7 @@ import {
   ScrollView,
   Animated,
   Easing,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -137,7 +138,7 @@ export default function LoginScreen() {
             {/* Header */}
             <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
               <Animated.View style={[styles.logoMark, { transform: [{ scale: logoAnim }] }]}>
-                <MaterialIcons name="explore" size={28} color={C.onPrimary} />
+                <Image source={require('../../assets/images/icon.png')} style={{ width: 44, height: 44, borderRadius: 10 }} />
               </Animated.View>
               <Text style={styles.title}>Tekrar Hoş Geldiniz</Text>
               <Text style={styles.subtitle}>
