@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,6 +7,8 @@ import {
   Platform,
   TouchableOpacity,
   ScrollView,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -22,15 +24,51 @@ import { ErrorBanner } from '@/components/ui/States';
 const C = Colors.light;
 
 export default function LoginScreen() {
-  const router   = useRouter();
-  const setAuth  = useAuthStore((s) => s.setAuth);
+  const router = useRouter();
+  const setAuth = useAuthStore((s) => s.setAuth);
 
-  const [email,     setEmail]     = useState('');
-  const [password,  setPassword]  = useState('');
-  const [showPass,  setShowPass]  = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
-  const [error,     setError]     = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
+  const logoAnim = useRef(new Animated.Value(0.86)).current;
+  const blobAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 550,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoAnim, {
+        toValue: 1,
+        friction: 7,
+        tension: 55,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const blobLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(blobAnim, { toValue: 1, duration: 4200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(blobAnim, { toValue: 0, duration: 4200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+    blobLoop.start();
+    return () => blobLoop.stop();
+  }, [blobAnim, fadeAnim, logoAnim, slideAnim]);
 
   const handleLogin = async () => {
     setError(null);
@@ -48,8 +86,8 @@ export default function LoginScreen() {
     try {
       const response = await authApi.login({ email: email.trim(), password });
       await setAuth(response.accessToken, response.refreshToken, {
-        id:       response.userId,
-        email:    response.email,
+        id: response.userId,
+        email: response.email,
         fullName: response.fullName,
       }, rememberMe);
     } catch (err: any) {
@@ -66,9 +104,14 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.root}>
+    <Animated.View style={[styles.root, { opacity: fadeAnim }]}>
       <StatusBar style="dark" />
-      <View style={styles.decorBlob} />
+      <Animated.View
+        style={[
+          styles.decorBlob,
+          { transform: [{ translateX: blobAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) }, { scale: blobAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }] },
+        ]}
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -92,18 +135,18 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.logoMark}>
+            <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
+              <Animated.View style={[styles.logoMark, { transform: [{ scale: logoAnim }] }]}>
                 <MaterialIcons name="explore" size={28} color={C.onPrimary} />
-              </View>
+              </Animated.View>
               <Text style={styles.title}>Tekrar Hoş Geldiniz</Text>
               <Text style={styles.subtitle}>
                 Yolculuklarınıza devam etmek için giriş yapın
               </Text>
-            </View>
+            </Animated.View>
 
             {/* Form */}
-            <View style={styles.form}>
+            <Animated.View style={[styles.form, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
               {error && <ErrorBanner message={error} />}
 
               <Input
@@ -159,10 +202,10 @@ export default function LoginScreen() {
                 size="lg"
                 style={styles.loginBtn}
               />
-            </View>
+            </Animated.View>
 
             {/* Footer */}
-            <View style={styles.footer}>
+            <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
               <Text style={styles.footerText}>Hesabınız yok mu?</Text>
               <TouchableOpacity
                 onPress={() => router.push('/(auth)/register')}
@@ -171,11 +214,11 @@ export default function LoginScreen() {
               >
                 <Text style={styles.footerLink}>Hesap Oluştur</Text>
               </TouchableOpacity>
-            </View>
+            </Animated.View>
           </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>
-    </View>
+    </Animated.View>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,6 +7,8 @@ import {
   Platform,
   TouchableOpacity,
   ScrollView,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -21,26 +23,52 @@ import { ErrorBanner } from '@/components/ui/States';
 
 const C = Colors.light;
 
-const VEHICLE_TYPES = [
-  { id: 'gasoline',  name: 'Benzinli',  icon: 'directions-car' as const },
-  { id: 'diesel',    name: 'Dizel',    icon: 'local-gas-station' as const },
-  { id: 'electric',  name: 'Elektrikli',  icon: 'electric-car' as const },
-  { id: 'hybrid',    name: 'Hibrit',    icon: 'electric-bolt' as const },
-  { id: 'bicycle',   name: 'Bisiklet',   icon: 'directions-bike' as const },
-  { id: 'walking',   name: 'Yaya',   icon: 'directions-walk' as const },
-];
-
 export default function RegisterScreen() {
-  const router  = useRouter();
+  const router = useRouter();
   const setAuth = useAuthStore((s) => s.setAuth);
 
-  const [fullName,            setFullName]            = useState('');
-  const [email,               setEmail]               = useState('');
-  const [password,            setPassword]            = useState('');
-  const [showPass,            setShowPass]            = useState(false);
-  const [defaultVehicleType,  setDefaultVehicleType]  = useState('electric');
-  const [error,               setError]               = useState<string | null>(null);
-  const [isLoading,           setIsLoading]           = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
+  const logoAnim = useRef(new Animated.Value(0.86)).current;
+  const blobAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 550,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoAnim, {
+        toValue: 1,
+        friction: 7,
+        tension: 55,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const blobLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(blobAnim, { toValue: 1, duration: 4200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(blobAnim, { toValue: 0, duration: 4200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+    blobLoop.start();
+    return () => blobLoop.stop();
+  }, [blobAnim, fadeAnim, logoAnim, slideAnim]);
 
   const handleRegister = async () => {
     setError(null);
@@ -63,13 +91,11 @@ export default function RegisterScreen() {
         fullName: fullName.trim(),
         email: email.trim(),
         password,
-        defaultVehicleType,
       });
       await setAuth(response.accessToken, response.refreshToken, {
         id: response.userId,
         email: response.email,
         fullName: response.fullName,
-        defaultVehicleType,
       });
     } catch (err: any) {
       if (err.response?.data?.error) {
@@ -85,9 +111,14 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={styles.root}>
+    <Animated.View style={[styles.root, { opacity: fadeAnim }]}>
       <StatusBar style="dark" />
-      <View style={styles.decorBlob} />
+      <Animated.View
+        style={[
+          styles.decorBlob,
+          { transform: [{ translateX: blobAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) }, { scale: blobAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }] },
+        ]}
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -111,18 +142,18 @@ export default function RegisterScreen() {
             </TouchableOpacity>
 
             {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.logoMark}>
+            <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
+              <Animated.View style={[styles.logoMark, { transform: [{ scale: logoAnim }] }]}>
                 <MaterialIcons name="explore" size={28} color={C.onPrimary} />
-              </View>
+              </Animated.View>
               <Text style={styles.title}>Hesap Oluştur</Text>
               <Text style={styles.subtitle}>
                 SmartRoute'a katılın ve rotalarınızı optimize etmeye başlayın
               </Text>
-            </View>
+            </Animated.View>
 
             {/* Form */}
-            <View style={styles.form}>
+            <Animated.View style={[styles.form, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
               {error && <ErrorBanner message={error} />}
 
               <Input
@@ -163,42 +194,6 @@ export default function RegisterScreen() {
                 hint="En az 6 karakter girilmelidir"
               />
 
-              {/* Vehicle type selector */}
-              <View style={styles.vehicleSection}>
-                <Text style={styles.vehicleLabel}>Varsayılan Ulaşım Modu</Text>
-                <View style={styles.vehicleGrid}>
-                  {VEHICLE_TYPES.map((v) => {
-                    const isSelected = defaultVehicleType === v.id;
-                    return (
-                      <TouchableOpacity
-                        key={v.id}
-                        style={[
-                          styles.vehicleCard,
-                          isSelected && styles.vehicleCardSelected,
-                        ]}
-                        onPress={() => setDefaultVehicleType(v.id)}
-                        disabled={isLoading}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: isSelected }}
-                      >
-                        <MaterialIcons
-                          name={v.icon}
-                          size={22}
-                          color={isSelected ? C.primary : C.outline}
-                        />
-                        <Text
-                          style={[
-                            styles.vehicleName,
-                            isSelected && styles.vehicleNameSelected,
-                          ]}
-                        >
-                          {v.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
 
               <Button
                 label="Hesap Oluştur"
@@ -209,10 +204,10 @@ export default function RegisterScreen() {
                 size="lg"
                 style={{ marginTop: Spacing.sm }}
               />
-            </View>
+            </Animated.View>
 
             {/* Footer */}
-            <View style={styles.footer}>
+            <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
               <Text style={styles.footerText}>Zaten hesabınız var mı?</Text>
               <TouchableOpacity
                 onPress={() => router.back()}
@@ -221,11 +216,11 @@ export default function RegisterScreen() {
               >
                 <Text style={styles.footerLink}>Giriş Yap</Text>
               </TouchableOpacity>
-            </View>
+            </Animated.View>
           </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -245,7 +240,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   keyboardView: { flex: 1 },
-  safeArea:    { flex: 1 },
+  safeArea: { flex: 1 },
   scroll: {
     flexGrow: 1,
     paddingHorizontal: Spacing.gutter,
@@ -292,45 +287,6 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: Spacing.base,
-  },
-  vehicleSection: {
-    gap: Spacing.sm,
-  },
-  vehicleLabel: {
-    ...Typography.label,
-    color: C.text,
-  },
-  vehicleGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  vehicleCard: {
-    flex: 1,
-    minWidth: '30%',
-    backgroundColor: C.surface,
-    borderWidth: 1.5,
-    borderColor: C.outlineVariant,
-    borderRadius: Rounded.lg,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    ...Shadow.sm,
-  },
-  vehicleCardSelected: {
-    backgroundColor: C.primaryFixed,
-    borderColor: C.primary,
-  },
-  vehicleName: {
-    ...Typography.caption,
-    color: C.outline,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  vehicleNameSelected: {
-    color: C.primary,
-    fontWeight: '700',
   },
   footer: {
     flexDirection: 'row',
