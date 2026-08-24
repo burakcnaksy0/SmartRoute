@@ -20,17 +20,17 @@ When a user needs to visit a bank before 12:00, pick up a package, and attend a 
 
 SmartRoute solves this by combining advanced mathematical optimization with modern API integrations:
 
-1. **Input Parsing:** Users can input their journey manually or use the NLP engine to parse free-text (e.g., "I need to visit the bank at 10 AM, then grab a coffee").
-2. **Matrix Calculation:** The system fetches a complete distance and duration matrix between all points using external providers (OpenRouteService/OSRM).
-3. **Algorithmic Optimization:** The `OptimizationEngine` filters out physically impossible time-window combinations, then generates candidate routes using Brute-Force (for small routes) or Nearest Neighbor + 2-Opt heuristics (for larger routes).
-4. **Multi-Objective Scoring:** Candidate routes are scored against multiple dimensions (Time, Cost, Distance, Traffic Risk, Parking Difficulty) tailored to the user's learned profile.
+1. **Input Parsing:** Users can input their journey manually, select **Saved Locations**, or use the NLP engine to parse free-text (e.g., "I need to visit the bank at 10 AM, then grab a coffee"). Place recommendations help auto-complete destinations.
+2. **Matrix Calculation:** The system fetches a complete distance and duration matrix between all points using open-source providers (OSRM / Nominatim).
+3. **Algorithmic Optimization:** The domain's `OptimizationEngine` filters out physically impossible time-window combinations, then generates candidate routes using Brute-Force (for small routes) or Nearest Neighbor + 2-Opt heuristics (for larger routes).
+4. **Multi-Objective Scoring:** Candidate routes are scored against multiple dimensions (Time, Cost, Distance, Traffic Risk) tailored to the user's learned profile.
 5. **Leg Routing:** Exact polylines and turn-by-turn data are fetched for the winning sequence and presented to the user.
 
 ```mermaid
 flowchart LR
     Client[Mobile App] -->|Journey Request| API[Spring Boot REST API]
     API -->|NLP Parsing| LLM[Hugging Face API]
-    API -->|Matrix & Routing| Routing[ORS / OSRM API]
+    API -->|Matrix & Routing| Routing[OSRM API]
     API -->|Optimization| Engine[Optimization Engine]
     Engine -->|Candidate Scoring| DB[(PostgreSQL)]
     Engine --> API
@@ -45,6 +45,8 @@ flowchart LR
 - **Advanced Route Optimization**: Implements VRPTW optimization capable of handling strict time windows and visit durations.
 - **Multi-Objective Routing Profiles**: Generates multiple plan alternatives ('fastest', 'cheapest', 'balanced', 'recommended') based on weighted scores.
 - **Preference Learning**: Automatically adapts to user choices over time using an Exponential Moving Average (EMA) algorithm, continually refining the "recommended" profile.
+- **Rich Mobile Experience**: Features smooth micro-interactions, swipeable history deletion, and an animated, state-aware journey progress HUD.
+- **Saved Locations & Smart Places**: Add custom-named saved locations and utilize Overpass-powered place recommendations.
 - **Electric Vehicle (EV) Support**: Integrates EV specific constraints (battery capacity, energy consumption) into route planning.
 - **Departure Time Optimization**: Suggests the statistical best time to depart to maximize the probability of arriving on time under varying traffic models.
 - **Resilient Infrastructure**: Uses Resilience4j circuit breakers to gracefully handle external routing API failures.
@@ -66,20 +68,19 @@ flowchart LR
 | **TypeScript** | Type-safe Frontend Development |
 | **Zustand** | Mobile State Management |
 | **Hugging Face API** | Natural Language Processing (LLM) |
-| **OpenRouteService (ORS) / OSRM**| Routing & Distance Matrix Engines |
+| **OSRM, Nominatim & Overpass**| Open-source Routing, Geocoding & Places Engines |
 | **Docker & Docker Compose** | Containerization for Local Infrastructure |
 
 ---
 
 ## Architecture
 
-The backend implements a robust **Layered Architecture**:
+The backend implements a hybrid approach, transitioning core domains to **Hexagonal Architecture (Ports and Adapters)** while maintaining a structured Layered Architecture for supporting services:
 
-- **Controller Layer (`/controller`)**: Exposes RESTful endpoints, handles HTTP requests, and validates input DTOs.
-- **Service Layer (`/service`)**: Contains the core business logic. Subdivided by domain (`journey`, `nlp`, `places`, `routing`, `user`). The `OptimizationEngine` resides here, cleanly separated from external I/O.
-- **Repository Layer (`/repository`)**: Spring Data JPA interfaces for database operations.
-- **Domain Layer (`/domain`)**: JPA Entities representing the database tables.
-- **Configuration & Security (`/config`, `/security`)**: Handles JWT-based stateless authentication and external provider configurations.
+- **Domain Layer (`/domain`)**: Contains pure business logic, entities, and services (like the `OptimizationEngine`). Entirely decoupled from Spring dependencies.
+- **Application Layer (`/application`)**: Use cases (e.g., `RoutePlanOptimizerService`) orchestrating domain objects and defining input/output ports.
+- **Infrastructure Layer (`/infrastructure`)**: Adapters for web (Controllers), persistence (JPA Repositories), and external APIs (OSRM, Nominatim).
+- **Configuration & Security (`/config`, `/security`)**: Handles JWT-based stateless authentication and Spring Bean wiring for domain services.
 - **Exception Handling (`/exception`)**: A global `@RestControllerAdvice` translates domain exceptions into standardized HTTP error responses.
 
 ---
@@ -91,17 +92,15 @@ SmartRoute/
 ├── .github/workflows/       # GitHub Actions CI/CD pipelines
 ├── backend/                 # Spring Boot Backend
 │   ├── src/main/java/com/smartroute/
+│   │   ├── routeplanning/   # Core Domain (Hexagonal Architecture)
+│   │   │   ├── application/ # Use cases and ports
+│   │   │   ├── domain/      # Pure business logic (OptimizationEngine)
+│   │   │   └── infrastructure/# Adapters (Web, Persistence, Routing)
+│   │   ├── nlp/             # Supporting Service (Layered)
 │   │   ├── config/          # Configurations (Security, Beans)
-│   │   ├── controller/      # REST APIs (Journey, Auth, Vehicle)
-│   │   ├── domain/          # Entities (Journey, JourneyStop, User, etc.)
-│   │   ├── dto/             # Request/Response data models
-│   │   ├── exception/       # Global exception handlers
-│   │   ├── mapper/          # Object mappers
-│   │   ├── repository/      # Spring Data JPA repositories
-│   │   ├── security/        # JWT Authentication mechanisms
-│   │   └── service/         # Business logic (Optimization, NLP, Routing)
+│   │   └── exception/       # Global exception handlers
 │   └── src/main/resources/
-│       ├── db/migration/    # Flyway SQL migrations (V1 to V7)
+│       ├── db/migration/    # Flyway SQL migrations
 │       └── application.properties
 ├── mobile/                  # React Native Expo App
 │   ├── app/                 # Expo Router file-based routing

@@ -26,6 +26,10 @@ interface JourneyState {
   draftDestination: { latitude: number; longitude: number; address: string } | null;
   infeasibleConflictingStops: string[] | null;
 
+  // Recent Destinations
+  recentDestinations: { title: string; subtitle: string; lat: number; lng: number }[];
+  addRecentDestination: (dest: { title: string; subtitle: string; lat: number; lng: number }) => void;
+
   // NLP flow
   nlpParsedResult: NlpParseResult | null;
   isNlpParsing: boolean;
@@ -87,6 +91,16 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
   draftStartLocation: null,
   draftDestination: null,
   infeasibleConflictingStops: null,
+  recentDestinations: [],
+
+  addRecentDestination: (dest) => {
+    set((state) => {
+      // Remove if exists
+      const filtered = state.recentDestinations.filter(d => d.title !== dest.title);
+      // Add to front, keep max 5
+      return { recentDestinations: [dest, ...filtered].slice(0, 5) };
+    });
+  },
 
   nlpParsedResult: null,
   isNlpParsing: false,

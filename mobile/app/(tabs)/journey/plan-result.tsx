@@ -119,7 +119,9 @@ function AnimatedPlanCard({ plan, isSelected, onSelect, index }: any) {
 
         <View style={styles.noteRow}>
           <MaterialIcons name="info-outline" size={14} color={C.textSecondary} />
-          <Text style={styles.noteText}>{plan.note}</Text>
+          <Text style={styles.noteText} numberOfLines={2}>
+            {(plan.note || '').split('\n')[0]}
+          </Text>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -187,6 +189,17 @@ export default function PlanResultScreen() {
     try {
       await startJourney();
     } catch {}
+
+    // Open external navigation for the first stop automatically
+    const firstStop = currentJourney.stops?.[0];
+    if (firstStop) {
+      const url =
+        Platform.OS === 'ios'
+          ? `maps://?daddr=${firstStop.lat},${firstStop.lng}`
+          : `https://www.google.com/maps/dir/?api=1&destination=${firstStop.lat},${firstStop.lng}`;
+      Linking.openURL(url).catch(() => console.log('Harita uygulaması açılamadı.'));
+    }
+
     router.push('/(tabs)/journey/active-journey' as any);
   };
 
@@ -200,6 +213,12 @@ export default function PlanResultScreen() {
     Linking.openURL(url).catch(() => Alert.alert('Hata', 'Harita uygulaması açılamadı.'));
   };
 
+  const getStressLevel = (score: number = 0.15) => {
+    if (score > 0.6) return { label: 'Yüksek', pct: score * 100, color: C.error };
+    if (score > 0.3) return { label: 'Orta', pct: score * 100, color: C.tertiary };
+    return { label: 'Düşük', pct: score * 100, color: C.secondary };
+  };
+
   const planOptions = [
     {
       id: 'fastest',
@@ -207,14 +226,14 @@ export default function PlanResultScreen() {
       subtitle: 'En Seri Rota',
       icon: 'bolt' as const,
       color: C.primary,
-      duration: fastestPlan?.totalDurationSeconds ?? (selectedPlan?.totalDurationSeconds ? selectedPlan.totalDurationSeconds - 120 : 2520),
-      distance: fastestPlan?.totalDistanceMeters ?? selectedPlan?.totalDistanceMeters ?? 24200,
-      cost: fastestPlan?.totalFuelCostEstimate ?? ((selectedPlan?.totalFuelCostEstimate ?? 65) * 1.1),
-      stressLevel: 'Yüksek',
-      stressPct: 75,
-      stressColor: C.error,
-      badge: '92% Eşleşme',
-      note: fastestPlan?.explanation || 'Otoyol ve ekspres hat ağırlıklı hızlı rota',
+      duration: fastestPlan?.totalDurationSeconds ?? selectedPlan?.totalDurationSeconds ?? 0,
+      distance: fastestPlan?.totalDistanceMeters ?? selectedPlan?.totalDistanceMeters ?? 0,
+      cost: fastestPlan?.totalFuelCostEstimate ?? selectedPlan?.totalFuelCostEstimate ?? 0,
+      stressLevel: getStressLevel(fastestPlan?.trafficRiskScore).label,
+      stressPct: getStressLevel(fastestPlan?.trafficRiskScore).pct,
+      stressColor: getStressLevel(fastestPlan?.trafficRiskScore).color,
+      badge: 'Hızlı Rota',
+      note: fastestPlan?.explanationText || fastestPlan?.explanation || 'Süre odaklı hızlı rota seçeneği.',
     },
     {
       id: 'recommended',
@@ -222,14 +241,14 @@ export default function PlanResultScreen() {
       subtitle: 'Önerilen Seçenek',
       icon: 'star' as const,
       color: C.secondary,
-      duration: recommendedPlan?.totalDurationSeconds ?? selectedPlan?.totalDurationSeconds ?? 2880,
-      distance: recommendedPlan?.totalDistanceMeters ?? selectedPlan?.totalDistanceMeters ?? 21000,
-      cost: recommendedPlan?.totalFuelCostEstimate ?? selectedPlan?.totalFuelCostEstimate ?? 58,
-      stressLevel: 'Düşük',
-      stressPct: 25,
-      stressColor: C.secondary,
-      badge: '98% Önerilen',
-      note: recommendedPlan?.explanation || 'Düşük stres, dengeli trafik ve minimum dönüş',
+      duration: recommendedPlan?.totalDurationSeconds ?? selectedPlan?.totalDurationSeconds ?? 0,
+      distance: recommendedPlan?.totalDistanceMeters ?? selectedPlan?.totalDistanceMeters ?? 0,
+      cost: recommendedPlan?.totalFuelCostEstimate ?? selectedPlan?.totalFuelCostEstimate ?? 0,
+      stressLevel: getStressLevel(recommendedPlan?.trafficRiskScore).label,
+      stressPct: getStressLevel(recommendedPlan?.trafficRiskScore).pct,
+      stressColor: getStressLevel(recommendedPlan?.trafficRiskScore).color,
+      badge: 'Önerilen',
+      note: recommendedPlan?.explanationText || recommendedPlan?.explanation || 'Dengeli süre ve maliyet.',
       isRecommended: true,
     },
     {
@@ -238,14 +257,14 @@ export default function PlanResultScreen() {
       subtitle: 'Eko Rota',
       icon: 'payments' as const,
       color: C.tertiary,
-      duration: cheapestPlan?.totalDurationSeconds ?? (selectedPlan?.totalDurationSeconds ? selectedPlan.totalDurationSeconds + 180 : 3300),
-      distance: cheapestPlan?.totalDistanceMeters ?? selectedPlan?.totalDistanceMeters ?? 19500,
-      cost: cheapestPlan?.totalFuelCostEstimate ?? ((selectedPlan?.totalFuelCostEstimate ?? 42) * 0.85),
-      stressLevel: 'Orta',
-      stressPct: 45,
-      stressColor: C.tertiary,
-      badge: '95% Eko',
-      note: cheapestPlan?.explanation || 'Minimum yakıt sarfiyatı ve ücretsiz geçişler',
+      duration: cheapestPlan?.totalDurationSeconds ?? selectedPlan?.totalDurationSeconds ?? 0,
+      distance: cheapestPlan?.totalDistanceMeters ?? selectedPlan?.totalDistanceMeters ?? 0,
+      cost: cheapestPlan?.totalFuelCostEstimate ?? selectedPlan?.totalFuelCostEstimate ?? 0,
+      stressLevel: getStressLevel(cheapestPlan?.trafficRiskScore).label,
+      stressPct: getStressLevel(cheapestPlan?.trafficRiskScore).pct,
+      stressColor: getStressLevel(cheapestPlan?.trafficRiskScore).color,
+      badge: 'Ekonomik',
+      note: cheapestPlan?.explanationText || cheapestPlan?.explanation || 'Minimum yakıt ve maliyet.',
     },
   ];
 
@@ -302,15 +321,26 @@ export default function PlanResultScreen() {
           })}
         </View>
 
-        {/* Trade-off Insight Box */}
-        <View style={styles.tradeoffBox}>
-          <MaterialIcons name="balance" size={22} color={C.primary} />
-          <Text style={styles.tradeoffText}>
-            <Text style={{ fontWeight: '700' }}>Değerlendirme: </Text>
-            En Hızlı rota 8 dakika zaman kazandırır; ancak Önerilen rota size ₺16,00 tasarruf sağlar
-            ve düşük stresli ferah ana arterleri tercih eder.
-          </Text>
-        </View>
+        {/* Dynamic Trade-off Insight */}
+        {selectedPlan?.explanationText && (
+          <View style={styles.tradeoffBox}>
+            <MaterialIcons name="local-gas-station" size={22} color={C.primary} />
+            <Text style={styles.tradeoffText}>
+              {selectedPlan.explanationText.split('\n').filter((l: string) => l.includes('⛽') || l.includes('💡')).join('\n') || 
+               `Seçili rota: ${formatDistance(selectedPlan.totalDistanceMeters)} mesafe, tahmini yakıt maliyeti ${formatCost(selectedPlan.totalFuelCostEstimate)}`
+              }
+            </Text>
+          </View>
+        )}
+        {!selectedPlan?.explanationText && (
+          <View style={styles.tradeoffBox}>
+            <MaterialIcons name="balance" size={22} color={C.primary} />
+            <Text style={styles.tradeoffText}>
+              <Text style={{ fontWeight: '700' }}>Değerlendirme: </Text>
+              Rota seçeneklerini karşılaştırarak en uygun güzergahı belirleyin.
+            </Text>
+          </View>
+        )}
 
         {/* Interactive Map Preview */}
         <Text style={styles.sectionHeading}>ROTA ÖNİZLEMESİ</Text>
@@ -369,20 +399,20 @@ export default function PlanResultScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: C.background,
+    backgroundColor: '#FAF8FF', // Soft modern background
   },
   scroll: {
     padding: Spacing.gutter,
-    paddingBottom: Spacing.xl,
-    gap: Spacing.base,
+    paddingBottom: Spacing.xl + 80,
+    gap: Spacing.md,
   },
   summaryCard: {
-    backgroundColor: C.surface,
-    borderRadius: Rounded.xl,
-    padding: Spacing.base,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: Rounded['2xl'],
+    padding: Spacing.lg,
     ...Shadow.md,
     borderWidth: 1,
-    borderColor: C.outlineVariant,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
   summaryRow: {
     flexDirection: 'row',
@@ -390,45 +420,44 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   summaryIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: C.primaryFixed,
     alignItems: 'center',
     justifyContent: 'center',
   },
   summaryTitle: {
-    ...Typography.h4,
-    color: C.text,
+    ...Typography.h3,
+    color: C.onSurface,
   },
   summarySub: {
-    ...Typography.caption,
-    color: C.textSecondary,
-    marginTop: 2,
+    ...Typography.bodySmall,
+    color: C.onSurfaceVariant,
+    marginTop: 4,
   },
   sectionHeading: {
-    ...Typography.caption,
-    fontWeight: '700',
+    ...Typography.labelCaps,
     color: C.outline,
-    letterSpacing: 0.8,
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
+    marginTop: Spacing.md,
   },
   plansContainer: {
     gap: Spacing.md,
   },
   planCard: {
-    backgroundColor: C.surface,
-    borderRadius: Rounded.xl,
-    padding: Spacing.base,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: Rounded['2xl'],
+    padding: Spacing.lg,
     gap: Spacing.md,
     ...Shadow.sm,
     borderWidth: 1.5,
-    borderColor: C.outlineVariant,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   planCardActive: {
     borderColor: C.primary,
-    backgroundColor: '#FAF9FF',
-    ...Shadow.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    ...Shadow.lg,
   },
   planCardHeader: {
     flexDirection: 'row',
@@ -442,24 +471,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   planIconBg: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   planTitle: {
-    ...Typography.h4,
-    color: C.text,
+    ...Typography.h3,
+    color: C.onSurface,
   },
   planSub: {
     ...Typography.caption,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
   },
   radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: C.primary,
     alignItems: 'center',
@@ -473,33 +502,32 @@ const styles = StyleSheet.create({
   },
   metricsGrid: {
     flexDirection: 'row',
-    backgroundColor: C.surfaceLow,
-    borderRadius: Rounded.lg,
+    backgroundColor: 'rgba(238, 240, 247, 0.5)',
+    borderRadius: Rounded.xl,
     padding: Spacing.md,
     alignItems: 'center',
   },
   metricItem: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
   metricLabel: {
     ...Typography.caption,
-    color: C.textSecondary,
-    fontSize: 11,
+    color: C.onSurfaceVariant,
   },
   metricVal: {
-    ...Typography.bodyMedium,
-    fontWeight: '700',
-    color: C.text,
+    ...Typography.h4,
+    color: C.onSurface,
   },
   metricDivider: {
     width: 1,
-    height: 28,
+    height: 32,
     backgroundColor: C.outlineVariant,
-    marginHorizontal: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    opacity: 0.5,
   },
   stressContainer: {
-    gap: 4,
+    gap: 6,
   },
   stressLabelRow: {
     flexDirection: 'row',
@@ -508,60 +536,68 @@ const styles = StyleSheet.create({
   },
   stressLabel: {
     ...Typography.caption,
-    color: C.textSecondary,
-    fontSize: 11,
+    color: C.onSurfaceVariant,
   },
   stressValue: {
     ...Typography.caption,
     fontWeight: '700',
-    fontSize: 11,
   },
   stressTrack: {
-    height: 6,
-    backgroundColor: C.surfaceLow,
-    borderRadius: 3,
+    height: 8,
+    backgroundColor: 'rgba(238, 240, 247, 0.8)',
+    borderRadius: 4,
     overflow: 'hidden',
   },
   stressFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 4,
   },
   noteRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: 'rgba(53, 37, 205, 0.04)',
+    padding: Spacing.sm,
+    borderRadius: Rounded.lg,
   },
   noteText: {
-    ...Typography.caption,
-    color: C.textSecondary,
+    ...Typography.bodySmall,
+    color: C.onSurfaceVariant,
+    flex: 1,
   },
   tradeoffBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: C.primaryFixed,
-    borderRadius: Rounded.xl,
-    padding: Spacing.md,
-    gap: Spacing.sm,
+    backgroundColor: 'rgba(59, 53, 208, 0.08)',
+    borderRadius: Rounded['2xl'],
+    padding: Spacing.lg,
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 53, 208, 0.1)',
   },
   tradeoffText: {
     ...Typography.bodySmall,
     color: C.primary,
     flex: 1,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   mapContainer: {
-    borderRadius: Rounded.xl,
+    borderRadius: Rounded['2xl'],
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: C.outlineVariant,
-    ...Shadow.sm,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+    ...Shadow.md,
   },
   footer: {
-    paddingHorizontal: Spacing.gutter,
-    paddingTop: Spacing.sm,
-    paddingBottom: Platform.OS === 'ios' ? Spacing.xs : Spacing.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.outlineVariant,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Spacing.marginMain,
+    paddingTop: Spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? 34 : Spacing.xl,
+    backgroundColor: 'rgba(250, 248, 255, 0.85)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.3)',
   },
 });

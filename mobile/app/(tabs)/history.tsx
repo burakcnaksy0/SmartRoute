@@ -260,7 +260,7 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: C.background,
+    backgroundColor: '#FAF8FF',
   },
   header: {
     paddingHorizontal: Spacing.gutter,
@@ -270,11 +270,11 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...Typography.h1,
-    color: C.text,
+    color: C.onSurface,
   },
   headerSub: {
     ...Typography.bodyMedium,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
   },
   content: {
     flex: 1,
@@ -291,12 +291,14 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: C.surface,
-    borderRadius: Rounded.xl,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: Rounded['2xl'],
     padding: Spacing.base,
     alignItems: 'center',
     gap: Spacing.xs,
-    ...Shadow.sm,
+    ...Shadow.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
   statValue: {
     ...Typography.h2,
@@ -304,7 +306,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     ...Typography.caption,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
     textAlign: 'center',
   },
   // Section label
@@ -323,7 +325,7 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontWeight: '600',
     color: C.primary,
-    backgroundColor: C.primaryContainer ?? '#EBF2FE',
+    backgroundColor: 'rgba(59, 53, 208, 0.1)',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: Rounded.full,
@@ -345,13 +347,13 @@ const styles = StyleSheet.create({
   },
   // Journey card
   card: {
-    backgroundColor: C.surface,
-    borderRadius: Rounded.xl,
-    padding: Spacing.base,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: Rounded['2xl'],
+    padding: Spacing.lg,
     gap: Spacing.sm,
-    borderWidth: 1,
-    borderColor: C.outlineVariant,
-    ...Shadow.sm,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
+    ...Shadow.lg,
   },
   cardTop: {
     flexDirection: 'row',
@@ -371,7 +373,7 @@ const styles = StyleSheet.create({
   cardStatus: {
     ...Typography.caption,
     fontWeight: '600',
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
   },
   dotSeparator: {
     ...Typography.caption,
@@ -390,13 +392,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE8E8',
   },
   cardTitle: {
-    ...Typography.bodyMedium,
-    fontWeight: '600',
-    color: C.text,
+    ...Typography.h4,
+    color: C.onSurface,
+    marginTop: 4,
   },
   cardMeta: {
     flexDirection: 'row',
     gap: Spacing.md,
+    marginTop: 4,
   },
   metaChip: {
     flexDirection: 'row',
@@ -405,12 +408,12 @@ const styles = StyleSheet.create({
   },
   metaText: {
     ...Typography.caption,
-    color: C.outline,
+    color: C.onSurfaceVariant,
   },
   // Swipe and Glass styles
   swipeableContainer: {
     marginBottom: Spacing.sm,
-    borderRadius: Rounded.xl,
+    borderRadius: Rounded['2xl'],
     overflow: 'hidden',
   },
   glassCard: {

@@ -49,6 +49,7 @@ export interface MapLocationViewProps {
   onMarkerPress?: (markerId: string) => void;
   onMapPress?: (coords: Coordinates) => void;
   autoCenterOnInitialLocation?: boolean;
+  controlsBottomOffset?: number;
 }
 
 // Modern desaturated map style matching Intelligent Mobility UI
@@ -124,6 +125,7 @@ export default function MapLocationView({
   onMarkerPress,
   onMapPress,
   autoCenterOnInitialLocation = false,
+  controlsBottomOffset,
 }: MapLocationViewProps) {
   const mapRef = useRef<MapView | null>(null);
   const fullMapRef = useRef<MapView | null>(null);
@@ -515,7 +517,7 @@ export default function MapLocationView({
 
       {/* Floating Map Actions (Inline mode) */}
       {showControls && (
-        <View style={styles.floatingControls}>
+        <View style={[styles.floatingControls, controlsBottomOffset !== undefined && { bottom: controlsBottomOffset }]}>
           <TouchableOpacity
             style={styles.floatingBtn}
             activeOpacity={0.8}

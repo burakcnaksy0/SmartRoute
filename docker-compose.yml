@@ -31,6 +31,26 @@ services:
       timeout: 5s
       retries: 5
 
+  fuel-api:
+    build: ./fuel-api
+    container_name: smartroute-fuel-api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CACHE_TTL=300
+      - REQUEST_TIMEOUT=15
+      - MAX_RETRIES=2
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "256M"
+
 volumes:
   postgres_data:
   redis_data:

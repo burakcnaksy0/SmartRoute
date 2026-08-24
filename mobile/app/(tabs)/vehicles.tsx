@@ -502,7 +502,7 @@ function VehicleCard({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: C.background,
+    backgroundColor: '#FAF8FF',
   },
   center: {
     flex: 1,
@@ -519,11 +519,11 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...Typography.h1,
-    color: C.text,
+    color: C.onSurface,
   },
   headerSub: {
     ...Typography.bodyMedium,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
     marginTop: 4,
   },
   scroll: {
@@ -531,12 +531,15 @@ const styles = StyleSheet.create({
     paddingBottom: TabBarHeight + Spacing['2xl'],
   },
   vehicleCard: {
-    backgroundColor: C.surface,
-    borderRadius: Rounded.xl,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderRadius: Rounded['2xl'],
     padding: Spacing.base,
     gap: Spacing.md,
     ...Shadow.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
     overflow: 'hidden',
+    marginBottom: Spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -552,24 +555,25 @@ const styles = StyleSheet.create({
   },
   vehicleName: {
     ...Typography.h3,
-    color: C.text,
+    color: C.onSurface,
   },
   vehicleSub: {
     ...Typography.bodySmall,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
   },
   vehicleIcon: {
     width: 48,
     height: 48,
-    borderRadius: Rounded.lg,
+    borderRadius: 24,
+    backgroundColor: 'rgba(59, 53, 208, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   statsGrid: {
     flexDirection: 'row',
-    backgroundColor: C.surfaceLow,
-    borderRadius: Rounded.lg,
+    backgroundColor: 'rgba(238, 240, 247, 0.6)',
+    borderRadius: Rounded.xl,
     padding: Spacing.md,
     alignItems: 'center',
   },
@@ -579,18 +583,19 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     ...Typography.caption,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
   },
   statValue: {
     ...Typography.bodyMedium,
-    color: C.text,
-    fontWeight: '600',
+    color: C.onSurface,
+    fontWeight: '700',
   },
   statDivider: {
     width: 1,
     height: 32,
     backgroundColor: C.outlineVariant,
     marginHorizontal: Spacing.md,
+    opacity: 0.5,
   },
   rangeRow: {
     flexDirection: 'row',
@@ -604,16 +609,17 @@ const styles = StyleSheet.create({
   },
   rangeText: {
     ...Typography.caption,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: C.primary,
   },
   editBtn: {
     padding: Spacing.xs,
   },
   addCard: {
-    backgroundColor: C.surface,
-    borderRadius: Rounded.xl,
-    borderWidth: 1.5,
-    borderColor: C.outlineVariant,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: Rounded['2xl'],
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
     borderStyle: 'dashed',
     marginBottom: Spacing.md,
   },
@@ -624,13 +630,13 @@ const styles = StyleSheet.create({
   },
   addCardText: {
     ...Typography.bodyMedium,
-    color: C.outline,
-    fontWeight: '500',
+    color: C.primary,
+    fontWeight: '600',
   },
   // Modal Styles
   modalSafeArea: {
     flex: 1,
-    backgroundColor: C.background,
+    backgroundColor: '#FAF8FF',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -639,14 +645,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.gutter,
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: C.outlineVariant,
+    borderBottomColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   modalCloseBtn: {
     padding: Spacing.xs,
   },
   modalTitle: {
     ...Typography.h3,
-    color: C.text,
+    color: C.onSurface,
   },
   modalScroll: {
     padding: Spacing.gutter,
@@ -669,18 +676,19 @@ const styles = StyleSheet.create({
   fieldLabel: {
     ...Typography.bodySmall,
     fontWeight: '600',
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
     marginBottom: 4,
   },
   input: {
-    height: 48,
-    backgroundColor: C.surface,
-    borderColor: C.outlineVariant,
+    height: 52,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 1,
-    borderRadius: Rounded.md,
+    borderRadius: Rounded.xl,
     paddingHorizontal: Spacing.md,
-    color: C.text,
+    color: C.onSurface,
     fontSize: 15,
+    ...Shadow.sm,
   },
   row: {
     flexDirection: 'row',
@@ -695,20 +703,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: Spacing.md,
-    backgroundColor: C.surface,
-    borderColor: C.outlineVariant,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 1,
-    borderRadius: Rounded.md,
+    borderRadius: Rounded.xl,
     gap: Spacing.sm,
+    ...Shadow.sm,
   },
   fuelOptionCardSelected: {
     borderColor: C.primary,
-    backgroundColor: C.primaryFixed,
+    backgroundColor: 'rgba(59, 53, 208, 0.1)',
   },
   fuelOptionLabel: {
     ...Typography.bodySmall,
-    color: C.text,
-    fontWeight: '500',
+    color: C.onSurface,
+    fontWeight: '600',
   },
   fuelOptionLabelSelected: {
     color: C.primary,
@@ -721,17 +730,20 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: C.outlineVariant,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
     marginTop: Spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Rounded.lg,
   },
   switchLabel: {
     ...Typography.bodyMedium,
     fontWeight: '600',
-    color: C.text,
+    color: C.onSurface,
   },
   switchSub: {
     ...Typography.caption,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
     marginTop: 2,
   },
   modalActions: {

@@ -16,12 +16,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useJourneyStore } from '@/store/journeyStore';
+import { useSavedLocationStore } from '@/store/savedLocationStore';
 import { Colors, Spacing, Rounded, Shadow, Typography, TabBarHeight } from '@/constants/theme';
 import { ScreenHeader } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { placesApi } from '@/api/places';
 import MapLocationView from '@/components/MapLocationView';
 import MapLocationPickerModal, { PickedLocationResult } from '@/components/MapLocationPickerModal';
+import { Alert } from 'react-native';
 
 const C = Colors.light;
 
@@ -55,6 +57,7 @@ export default function StopDetailScreen() {
   }>();
 
   const { draftStops, updateDraftStop, addDraftStop, deleteDraftStop } = useJourneyStore();
+  const { saveLocation, locations } = useSavedLocationStore();
 
   const existingIndex = params.stopIndex !== undefined ? parseInt(params.stopIndex, 10) : -1;
   const existingStop = existingIndex >= 0 ? draftStops?.[existingIndex] : undefined;
@@ -78,6 +81,10 @@ export default function StopDetailScreen() {
   const [windowEnd, setWindowEnd] = useState(isoToTime(existingStop?.timeWindowEnd) || '12:00');
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  const [isFavorited, setIsFavorited] = useState(
+    locations.some(loc => loc.lat === lat && loc.lng === lng)
+  );
 
   // Picker modal state
   const [pickerModalVisible, setPickerModalVisible] = useState(false);
@@ -144,6 +151,18 @@ export default function StopDetailScreen() {
     }
     router.back();
   };
+  
+  const handleFavorite = async () => {
+    if (isFavorited) {
+      Alert.alert('Bilgi', 'Bu konum zaten favorilerinize eklenmiş.');
+      return;
+    }
+    const success = await saveLocation(placeName, lat, lng, `${lat.toFixed(4)}, ${lng.toFixed(4)}`, 'favorite');
+    if (success) {
+      Alert.alert('Başarılı', 'Konum favorilere eklendi.');
+      setIsFavorited(true);
+    }
+  };
 
   const getCategoryIcon = (type: StopType): keyof typeof MaterialIcons.glyphMap => {
     switch (type) {
@@ -161,7 +180,14 @@ export default function StopDetailScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
-      <ScreenHeader title="Durak Detayları" />
+      <ScreenHeader 
+        title="Durak Detayları" 
+        rightComponent={
+          <TouchableOpacity onPress={handleFavorite} style={{ paddingHorizontal: Spacing.sm }}>
+            <MaterialIcons name={isFavorited ? "favorite" : "favorite-outline"} size={24} color={C.primary} />
+          </TouchableOpacity>
+        }
+      />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}

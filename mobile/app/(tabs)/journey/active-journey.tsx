@@ -115,6 +115,42 @@ export default function ActiveJourneyScreen() {
     longitude: currentJourney?.startLng ?? 28.9784,
   });
 
+  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3;
+    const p1 = lat1 * Math.PI / 180;
+    const p2 = lat2 * Math.PI / 180;
+    const dp = (lat2 - lat1) * Math.PI / 180;
+    const dl = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  useEffect(() => {
+    let subscription: Location.LocationSubscription;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      subscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 10 },
+        (location) => {
+          const coords = { latitude: location.coords.latitude, longitude: location.coords.longitude };
+          setUserLocation(coords);
+          
+          if (currentStop) {
+             const dist = getDistance(coords.latitude, coords.longitude, currentStop.lat, currentStop.lng);
+             if (dist < 100) {
+                 markStopAsCompleted(currentStop.id);
+             }
+          }
+        }
+      );
+    })();
+    return () => {
+      if (subscription) subscription.remove();
+    };
+  }, [currentStop, markStopAsCompleted]);
+
   const stopsSorted = [...(currentJourney?.stops ?? [])].sort(
     (a, b) => (a.optimizedOrder ?? a.sequenceOrder) - (b.optimizedOrder ?? b.sequenceOrder)
   );
@@ -173,6 +209,15 @@ export default function ActiveJourneyScreen() {
       if (!leg.polylineEncoded) return [];
       return decodePolyline(leg.polylineEncoded);
     }) ?? [];
+
+  // Real ETA calculation based on plan legs
+  let remainingSeconds = 0;
+  if (selectedPlan && selectedPlan.legs) {
+    const remainingLegs = selectedPlan.legs.filter((leg: any) => !leg.toStop || !completedStopIds.includes(leg.toStop.id));
+    remainingSeconds = remainingLegs.reduce((acc: number, leg: any) => acc + leg.durationSeconds, 0);
+  }
+  const remainingMinutes = Math.round(remainingSeconds / 60);
+  const targetArrival = new Date(Date.now() + remainingSeconds * 1000);
 
   // Completed State
   if (!currentJourney || currentJourney.status === 'completed') {
@@ -240,14 +285,14 @@ export default function ActiveJourneyScreen() {
             <View>
               <Text style={styles.hudEtaLabel}>Kalan Süre</Text>
               <Text style={styles.hudEtaVal}>
-                {currentStop ? `${currentStop.visitDurationMinutes + 12} dk` : 'Varıldı'}
+                {currentStop ? `${remainingMinutes} dk` : 'Varıldı'}
               </Text>
             </View>
             <View style={styles.hudDivider} />
             <View>
               <Text style={styles.hudEtaLabel}>Hedef Varış</Text>
               <Text style={styles.hudEtaVal}>
-                {new Date(Date.now() + 24 * 60000).toLocaleTimeString([], {
+                {targetArrival.toLocaleTimeString([], {
                   hour: '2-digit',
                   minute: '2-digit',
                 })}
@@ -431,7 +476,7 @@ export default function ActiveJourneyScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: C.background,
+    backgroundColor: '#FAF8FF',
   },
   closeBtn: {
     paddingHorizontal: Spacing.sm,
@@ -450,42 +495,46 @@ const styles = StyleSheet.create({
     borderRadius: Rounded['2xl'],
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: C.outlineVariant,
+    borderColor: 'rgba(255,255,255,0.8)',
     ...Shadow.md,
   },
   hudSheet: {
-    backgroundColor: C.surface,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
     borderRadius: Rounded['2xl'],
-    padding: Spacing.base,
+    padding: Spacing.lg,
     gap: Spacing.md,
-    ...Shadow.lg,
-    borderWidth: 1,
-    borderColor: C.outlineVariant,
+    ...Shadow.xl,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   hudHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    padding: Spacing.sm,
+    borderRadius: Rounded.xl,
   },
   hudEtaLabel: {
     ...Typography.caption,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
     fontSize: 11,
     textTransform: 'uppercase',
   },
   hudEtaVal: {
     ...Typography.h3,
-    color: C.text,
+    color: C.onSurface,
     marginTop: 2,
   },
   hudDivider: {
     width: 1,
     height: 32,
     backgroundColor: C.outlineVariant,
+    opacity: 0.5,
   },
   progressTrack: {
-    height: 6,
-    backgroundColor: C.surfaceLow,
+    height: 8,
+    backgroundColor: 'rgba(59, 53, 208, 0.1)',
     borderRadius: Rounded.full,
     overflow: 'hidden',
   },
@@ -496,14 +545,16 @@ const styles = StyleSheet.create({
     shadowColor: C.primary,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   stopCard: {
-    backgroundColor: C.surfaceLow,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderRadius: Rounded.xl,
     padding: Spacing.base,
     gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   stopCardHeader: {
     flexDirection: 'row',
@@ -517,11 +568,11 @@ const styles = StyleSheet.create({
   },
   stopName: {
     ...Typography.h3,
-    color: C.text,
+    color: C.onSurface,
   },
   prevStopText: {
     ...Typography.caption,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
   },
   stopActionsRow: {
     flexDirection: 'row',
@@ -537,7 +588,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: C.primaryFixed,
+    backgroundColor: 'rgba(59, 53, 208, 0.1)',
   },
   navActionText: {
     ...Typography.buttonSmall,
@@ -550,13 +601,15 @@ const styles = StyleSheet.create({
   },
   timelineSection: {
     gap: Spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: Rounded['2xl'],
+    padding: Spacing.md,
   },
   sectionHeading: {
-    ...Typography.caption,
-    fontWeight: '700',
+    ...Typography.labelCaps,
     color: C.outline,
-    letterSpacing: 0.8,
     paddingHorizontal: 4,
+    marginBottom: 4,
   },
   timeline: {
     gap: 0,
@@ -567,14 +620,14 @@ const styles = StyleSheet.create({
   },
   indicatorCol: {
     alignItems: 'center',
-    width: 20,
+    width: 24,
     paddingTop: 2,
   },
   timelineDot: {
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: C.surfaceContainerHigh,
+    backgroundColor: 'rgba(255,255,255,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
@@ -587,9 +640,9 @@ const styles = StyleSheet.create({
   timelineDotCurrent: {
     borderColor: C.primary,
     backgroundColor: C.primaryFixed,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
   timelineLine: {
     flex: 1,
@@ -597,9 +650,11 @@ const styles = StyleSheet.create({
     backgroundColor: C.outlineVariant,
     marginTop: 2,
     marginBottom: -2,
+    opacity: 0.5,
   },
   timelineLineDone: {
     backgroundColor: C.secondary,
+    opacity: 1,
   },
   timelineContent: {
     flex: 1,
@@ -609,7 +664,7 @@ const styles = StyleSheet.create({
   timelineTitle: {
     ...Typography.bodyMedium,
     fontWeight: '600',
-    color: C.text,
+    color: C.onSurface,
   },
   timelineTitleDone: {
     textDecorationLine: 'line-through',
@@ -621,29 +676,32 @@ const styles = StyleSheet.create({
   },
   timelineSub: {
     ...Typography.caption,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
   },
   // Overlay
   overlayBg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 21, 35, 0.45)',
+    backgroundColor: 'rgba(250, 248, 255, 0.65)',
     justifyContent: 'flex-end',
     zIndex: 20,
   },
   replanSheet: {
-    backgroundColor: C.surface,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderTopLeftRadius: Rounded['3xl'],
     borderTopRightRadius: Rounded['3xl'],
     padding: Spacing.xl,
     gap: Spacing.base,
     ...Shadow.xl,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.8)',
   },
   replanHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: 40,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: C.outlineVariant,
     alignSelf: 'center',
+    opacity: 0.5,
   },
   replanHeader: {
     flexDirection: 'row',
@@ -651,16 +709,16 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   replanIconBg: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: C.errorContainer,
     alignItems: 'center',
     justifyContent: 'center',
   },
   replanTitle: {
-    ...Typography.h4,
-    color: C.text,
+    ...Typography.h3,
+    color: C.onSurface,
   },
   replanSub: {
     ...Typography.caption,
@@ -670,31 +728,32 @@ const styles = StyleSheet.create({
   },
   replanDesc: {
     ...Typography.bodyMedium,
-    color: C.textSecondary,
-    lineHeight: 20,
+    color: C.onSurfaceVariant,
+    lineHeight: 22,
   },
   replanMetricsRow: {
     flexDirection: 'row',
-    backgroundColor: C.surfaceLow,
+    backgroundColor: 'rgba(238, 240, 247, 0.5)',
     borderRadius: Rounded.xl,
-    padding: Spacing.base,
+    padding: Spacing.md,
   },
   replanMetricItem: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
   replanMetricLabel: {
     ...Typography.caption,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
   },
   replanMetricVal: {
     ...Typography.h4,
-    color: C.text,
+    color: C.onSurface,
   },
   replanMetricDivider: {
     width: 1,
     backgroundColor: C.outlineVariant,
     marginHorizontal: Spacing.md,
+    opacity: 0.3,
   },
   replanButtonsRow: {
     flexDirection: 'row',

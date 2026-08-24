@@ -3,9 +3,14 @@ import { Stack, useSegments, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { ActivityIndicator, View } from 'react-native';
 import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuthStore } from '@/store/authStore';
+// import Mapbox from '@rnmapbox/maps';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+
+// Mapbox.setAccessToken('your_mapbox_token_here');
+// Mapbox.setTelemetryEnabled(false);
 
 SplashScreen.preventAutoHideAsync();
 
@@ -53,9 +58,11 @@ export default function RootLayout() {
   }, [initialize]);
 
   return (
-    <ThemeProvider value={DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <NavigationLayout />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={DefaultTheme}>
+        <AnimatedSplashOverlay />
+        <NavigationLayout />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

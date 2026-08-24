@@ -3,7 +3,6 @@ import {
   StyleSheet,
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
@@ -11,25 +10,31 @@ import {
   Platform,
   Alert,
   KeyboardAvoidingView,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { useJourneyStore } from '@/store/journeyStore';
-import { useAuthStore } from '@/store/authStore';
 import { placesApi, PlaceResult } from '@/api/places';
-import { Colors, Spacing, Rounded, Shadow, Typography, TabBarHeight } from '@/constants/theme';
+import { Colors, Spacing, Rounded, Shadow, Typography } from '@/constants/theme';
 import MapLocationView, { MapMarkerItem } from '@/components/MapLocationView';
 import MapLocationPickerModal, { PickedLocationResult } from '@/components/MapLocationPickerModal';
-import { Button } from '@/components/ui/Button';
+import FavoritesModal from '@/components/FavoritesModal';
+import JourneySideMenu from '@/components/JourneySideMenu';
 
 const C = Colors.light;
 
 export default function JourneyIndexScreen() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const {
     currentJourney,
     draftStops,
@@ -37,12 +42,11 @@ export default function JourneyIndexScreen() {
     draftDestination,
     setDraftStartLocation,
     setDraftDestination,
-    addDraftStop,
-    deleteDraftStop,
     clearDraftStops,
     createJourney,
     optimizeJourney,
     isLoading: isJourneyLoading,
+    addRecentDestination,
   } = useJourneyStore();
 
   // Location states
@@ -65,10 +69,25 @@ export default function JourneyIndexScreen() {
   const [pickerModalVisible, setPickerModalVisible] = useState(false);
   const [pickerMode, setPickerMode] = useState<'start' | 'destination' | 'stop'>('start');
 
+  // Favorites Modal State
+  const [favoritesModalVisible, setFavoritesModalVisible] = useState(false);
+
+  // Side Menu State
+  const [sideMenuVisible, setSideMenuVisible] = useState(false);
+
+  // Routing Card State
+  const [isRoutingCardVisible, setIsRoutingCardVisible] = useState(false);
+
+  const toggleRoutingCard = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsRoutingCardVisible(!isRoutingCardVisible);
+  };
+
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const searchRequestId = useRef(0);
 
   useEffect(() => {
     Animated.parallel([
@@ -77,12 +96,14 @@ export default function JourneyIndexScreen() {
     ]).start();
 
     // Infinite pulse animation for live indicator
-    Animated.loop(
+    const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.5, duration: 800, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    pulseLoop.start();
+    return () => pulseLoop.stop();
   }, []);
 
   // Sync with draftStartLocation if updated externally
@@ -110,7 +131,7 @@ export default function JourneyIndexScreen() {
             address: addr,
           });
         }
-      } catch {}
+      } catch { }
     }
   };
 
@@ -192,6 +213,13 @@ export default function JourneyIndexScreen() {
         address: result.address || result.placeName,
       });
 
+      addRecentDestination({
+        title: result.placeName,
+        subtitle: result.address || 'Harita Konumu',
+        lat: result.latitude,
+        lng: result.longitude,
+      });
+
       // Route to stop detail to configure destination parameters
       router.push({
         pathname: '/(tabs)/journey/stop-detail' as any,
@@ -213,11 +241,15 @@ export default function JourneyIndexScreen() {
     }
   };
 
-  // Debounced search for destination input
+  // Debounced search for destination input. Ignore stale responses when
+  // the user types again before the previous request has completed.
   useEffect(() => {
+    const requestId = ++searchRequestId.current;
+
     if (!destinationQuery.trim()) {
       setSearchResults([]);
       setShowSearchResults(false);
+      setIsSearching(false);
       return;
     }
 
@@ -225,12 +257,18 @@ export default function JourneyIndexScreen() {
       setIsSearching(true);
       try {
         const results = await placesApi.search(destinationQuery);
-        setSearchResults(results);
-        setShowSearchResults(true);
+        if (requestId === searchRequestId.current) {
+          setSearchResults(results);
+          setShowSearchResults(true);
+        }
       } catch (err) {
-        console.warn('Destination search error:', err);
+        if (requestId === searchRequestId.current) {
+          setSearchResults([]);
+          setShowSearchResults(false);
+          console.warn('Destination search error:', err);
+        }
       } finally {
-        setIsSearching(false);
+        if (requestId === searchRequestId.current) setIsSearching(false);
       }
     }, 400);
 
@@ -240,11 +278,19 @@ export default function JourneyIndexScreen() {
   // Handle selecting a destination from search
   const handleSelectDestination = (place: PlaceResult) => {
     setShowSearchResults(false);
+    setIsSearching(false);
     setDestinationQuery(place.name);
     setDraftDestination({
       latitude: place.lat,
       longitude: place.lng,
       address: place.vicinity || place.name,
+    });
+
+    addRecentDestination({
+      title: place.name,
+      subtitle: place.vicinity || 'Arama Sonucu',
+      lat: place.lat,
+      lng: place.lng,
     });
 
     // Route to stop detail or add directly as stop
@@ -273,6 +319,15 @@ export default function JourneyIndexScreen() {
       return;
     }
 
+    if (destinationQuery.trim() && !draftDestination) {
+      Alert.alert(
+        'Hedefi Onaylayın',
+        'Devam etmek için arama sonuçlarından bir hedef seçin veya haritada bir konum işaretleyin.'
+      );
+      setShowSearchResults(true);
+      return;
+    }
+
     const today = new Date();
     const plannedDepartureTime = today.toISOString().slice(0, 19);
 
@@ -283,9 +338,6 @@ export default function JourneyIndexScreen() {
         lat: draftDestination.latitude,
         lng: draftDestination.longitude
       };
-    } else if (destinationQuery.trim()) {
-      // Fallback if typed but not selected via map
-      destParams = { lat: userCoords.latitude + 0.02, lng: userCoords.longitude + 0.02 };
     }
 
     try {
@@ -327,343 +379,222 @@ export default function JourneyIndexScreen() {
     }
   };
 
-  const recentDestinations = [
-    { title: '1200 Tech Bulvarı', subtitle: '42 dk · 28 km', lat: 41.02, lng: 29.01 },
-    { title: 'Kadıköy Rıhtım', subtitle: '18 dk · 9.4 km', lat: 40.99, lng: 29.02 },
-    { title: 'Maslak İş Merkezi', subtitle: '35 dk · 22 km', lat: 41.11, lng: 29.02 },
+  // No hardcoded recentDestinations, using from store
+
+  const [loadingStep, setLoadingStep] = useState(0);
+
+  useEffect(() => {
+    if (isJourneyLoading) {
+      const interval = setInterval(() => {
+        setLoadingStep((s) => (s + 1) % 3);
+      }, 1500);
+      return () => clearInterval(interval);
+    }
+  }, [isJourneyLoading]);
+
+  const loadingMessages = [
+    'Trafik Yoğunluğu Analiz Ediliyor...',
+    'Alternatif Rotalar Çıkarılıyor...',
+    'Maliyet Optimizasyonu Yapılıyor...'
   ];
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <View style={styles.container}>
       <StatusBar style="dark" />
 
-      {/* Modern Top App Bar */}
-      <View style={styles.header}>
-        <View style={styles.brandRow}>
-          <View style={styles.logoBadge}>
-            <MaterialIcons name="explore" size={20} color={C.onPrimary} />
-          </View>
-          <Text style={styles.brandTitle}>SmartRoute</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.avatarButton}
-          activeOpacity={0.8}
-          onPress={() => router.push('/(tabs)/profile' as any)}
-        >
-          <MaterialIcons name="person" size={20} color={C.onPrimary} />
-        </TouchableOpacity>
+      {/* Map Background */}
+      <View style={styles.mapBackground}>
+        <MapLocationView
+          height="100%"
+          initialLocation={userCoords}
+          markers={mapMarkers}
+          routePolyline={routePolyline}
+          expandable={true}
+          onLocationChange={handleLocationChange}
+          autoCenterOnInitialLocation={!draftStartLocation}
+          controlsBottomOffset={insets.bottom + 120}
+        />
+        <View style={styles.mapOverlayGradient} pointerEvents="none" />
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-        {/* Title Header */}
-        <View style={styles.titleSection}>
-          <Text style={styles.pageTitle}>Yolculuk</Text>
-          <Text style={styles.pageSubtitle}>
-            Akıllı mobilite ve harita destekli rota planlayıcı
-          </Text>
-        </View>
-
-        {/* Active Journey Shortcut */}
-        {currentJourney?.status === 'active' && (
-          <TouchableOpacity
-            style={styles.activeBanner}
-            activeOpacity={0.9}
-            onPress={() => router.push('/(tabs)/journey/active-journey' as any)}
-          >
-            <View style={styles.activePulse}>
-              <View style={styles.activeDot} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.activeTitle}>Devam Eden Yolculuk</Text>
-              <Text style={styles.activeSub} numberOfLines={1}>
-                {currentJourney.startAddressText || 'Aktif Rota'}
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color={C.primary} />
-          </TouchableOpacity>
-        )}
-
-        {/* Optimized Expandable Map View */}
-        <View style={styles.mapWrapper}>
-          <MapLocationView
-            height={260}
-            initialLocation={userCoords}
-            markers={mapMarkers}
-            routePolyline={routePolyline}
-            expandable={true}
-            onLocationChange={handleLocationChange}
-            autoCenterOnInitialLocation={!draftStartLocation}
-          />
-          {/* Floating Pill on Map */}
-          <View style={styles.mapPillOverlay}>
-            <View style={styles.mapPill}>
-              <Animated.View style={[styles.liveIndicator, { transform: [{ scale: pulseAnim }], opacity: pulseAnim.interpolate({ inputRange: [1, 1.5], outputRange: [1, 0.4] }) }]} />
-              <Text style={styles.mapPillText}>
-                {draftStops.length > 0
-                  ? `${draftStops.length} Durak Planlandı`
-                  : 'Dokunarak Haritayı Büyütün'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Intelligent Mobility Route Planning Sheet */}
+      <View style={[styles.safeAreaOverlay, { paddingTop: Math.max(insets.top, 50) }]} pointerEvents="box-none">
+        {/* Top Floating Header & Card */}
         <Animated.View
-          style={[
-            styles.sheetCard,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-          ]}
+          style={[styles.topContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+          pointerEvents="box-none"
         >
-          <View style={styles.handleBar} />
-
-          {/* Start Location (Tap to change via Map Picker) */}
-          <TouchableOpacity
-            style={styles.locationFieldRow}
-            activeOpacity={0.8}
-            onPress={() => handleOpenPicker('start')}
-            accessibilityLabel="Başlangıç konumunu haritadan değiştir"
-          >
-            <View style={styles.startDot}>
-              <View style={styles.startDotInner} />
+          <View style={styles.floatingHeader}>
+            <TouchableOpacity style={styles.headerIcon} onPress={() => setSideMenuVisible(true)}>
+              <MaterialIcons name="menu" size={24} color={C.onSurface} />
+            </TouchableOpacity>
+            <View style={styles.headerTitleBox}>
+              <Text style={styles.headerTitle}>SmartRoute</Text>
             </View>
-            <View style={styles.fieldContent}>
-              <Text style={styles.fieldLabel}>Başlangıç Konumu</Text>
-              <Text style={styles.fieldText} numberOfLines={1}>
-                {startAddress}
-              </Text>
-            </View>
-            <View style={styles.editMapBadge}>
-              <MaterialIcons name="edit-location" size={16} color={C.primary} />
-              <Text style={styles.editMapBadgeText}>Harita</Text>
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.connectorLine} />
-
-          {/* Destination Search & Map Selection Row */}
-          <View style={styles.destinationFieldRow}>
-            <View style={styles.destPin}>
-              <MaterialIcons name="place" size={16} color={C.onPrimary} />
-            </View>
-            <View style={styles.fieldContent}>
-              <Text style={styles.fieldLabel}>Hedef Konumu</Text>
-              <TextInput
-                style={styles.destinationInput}
-                placeholder="Nereye gitmek istersiniz?"
-                placeholderTextColor={C.outline}
-                value={destinationQuery}
-                onChangeText={(text) => {
-                  setDestinationQuery(text);
-                  setShowSearchResults(text.length > 0);
-                }}
-              />
-            </View>
-
-            {destinationQuery.length > 0 ? (
-              <TouchableOpacity
-                onPress={() => {
-                  setDestinationQuery('');
-                  setDraftDestination(null);
-                  setShowSearchResults(false);
-                }}
-              >
-                <MaterialIcons name="close" size={18} color={C.outline} />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.pickMapButton}
-                activeOpacity={0.8}
-                onPress={() => handleOpenPicker('destination')}
-                accessibilityLabel="Hedefi haritadan seç"
-              >
-                <MaterialIcons name="map" size={18} color={C.primary} />
-                <Text style={styles.pickMapButtonText}>Haritadan</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity style={styles.headerIcon} accessibilityLabel="Profil">
+              <MaterialIcons name="account-circle" size={28} color={C.primary} />
+            </TouchableOpacity>
           </View>
 
-          {/* Autocomplete Search Dropdown */}
-          {showSearchResults && (
-            <View style={styles.searchResultsDropdown}>
-              {isSearching ? (
-                <View style={styles.searchLoading}>
-                  <ActivityIndicator size="small" color={C.primary} />
-                  <Text style={styles.searchLoadingText}>Konumlar aranıyor...</Text>
-                </View>
-              ) : searchResults.length > 0 ? (
-                searchResults.map((place, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={styles.searchResultItem}
-                    onPress={() => handleSelectDestination(place)}
-                  >
-                    <MaterialIcons name="location-on" size={18} color={C.primary} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.resultItemTitle} numberOfLines={1}>
-                        {place.name}
-                      </Text>
-                      {place.vicinity && (
-                        <Text style={styles.resultItemSubtitle} numberOfLines={1}>
-                          {place.vicinity}
-                        </Text>
-                      )}
-                    </View>
-                    <MaterialIcons name="arrow-forward" size={16} color={C.outline} />
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <View style={styles.noResultBox}>
-                  <Text style={styles.noResultText}>Eşleşen adres bulunamadı</Text>
-                </View>
-              )}
+          {/* Plan Route FAB (Visible when card is closed) */}
+          {!isRoutingCardVisible && (
+            <View style={styles.planRouteFabContainer}>
+              <TouchableOpacity style={styles.planRouteFab} onPress={toggleRoutingCard}>
+                <MaterialIcons name="add-location-alt" size={24} color={C.onPrimary} />
+                <Text style={styles.planRouteFabText}>Rota Planla</Text>
+              </TouchableOpacity>
             </View>
           )}
 
-          {/* Draft Stops Summary List if any */}
-          {draftStops.length > 0 && (
-            <View style={styles.draftStopsContainer}>
-              <View style={styles.draftStopsHeader}>
-                <Text style={styles.draftStopsTitle}>EKLENEN DURAKLAR ({draftStops.length})</Text>
-                <TouchableOpacity onPress={clearDraftStops}>
-                  <Text style={styles.clearStopsText}>Tümünü Temizle</Text>
-                </TouchableOpacity>
+          {/* Main Routing Card Moved to Top */}
+          {isRoutingCardVisible && (
+            <View style={[styles.routingCardGlass, { marginTop: Spacing.md }]}>
+              {/* Header / Title inside Card */}
+              <View style={styles.cardHeaderRow}>
+                <Text style={styles.cardHeaderTitle}>Rotanızı Planlayın</Text>
+                
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+                  <TouchableOpacity style={styles.addStopSmallBtn} onPress={() => router.push('/(tabs)/journey/new-stop' as any)}>
+                    <MaterialIcons name="add" size={16} color={C.primary} />
+                    <Text style={styles.addStopSmallText}>
+                      {draftStops.length > 0 ? `Duraklar (${draftStops.length})` : 'Durak Ekle'}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity style={styles.closeCardBtn} onPress={toggleRoutingCard}>
+                    <MaterialIcons name="keyboard-arrow-up" size={24} color={C.textSecondary} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {draftStops.map((stop, idx) => (
-                <View key={idx} style={styles.draftStopRow}>
-                  <View style={styles.draftStopBadge}>
-                    <Text style={styles.draftStopBadgeText}>{idx + 1}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.draftStopName} numberOfLines={1}>
-                      {stop.placeName}
-                    </Text>
-                    <Text style={styles.draftStopMeta}>
-                      {stop.visitDurationMinutes} dk mola • Öncelik: {stop.priority || 'normal'}
-                    </Text>
-                  </View>
+            {/* Input Area */}
+            <View style={styles.inputArea}>
+              <View style={styles.verticalDashedLine} />
+
+              {/* Start */}
+              <TouchableOpacity style={styles.locationRow} onPress={() => handleOpenPicker('start')}>
+                <View style={styles.startDotBadge}><View style={styles.startDotInner} /></View>
+                <View style={styles.locationBox}>
+                  <Text style={styles.locationText} numberOfLines={1}>{startAddress}</Text>
+                  <MaterialIcons name="my-location" size={20} color={C.onSurfaceVariant + '80'} />
+                </View>
+              </TouchableOpacity>
+
+              {/* End */}
+              <View style={styles.locationRow}>
+                <View style={styles.endPinBadge}><MaterialIcons name="location-on" size={16} color={C.error} /></View>
+                <View style={styles.locationBoxEnd}>
+                  <TextInput
+                    value={destinationQuery}
+                    onChangeText={(value) => {
+                      setDestinationQuery(value);
+                      if (draftDestination) setDraftDestination(null);
+                    }}
+                    placeholder="Hedef konum seçin"
+                    placeholderTextColor={C.onSurfaceVariant}
+                    style={styles.destinationInput}
+                    returnKeyType="search"
+                    accessibilityLabel="Hedef konumu ara"
+                    onFocus={() => destinationQuery.trim() && setShowSearchResults(true)}
+                  />
                   <TouchableOpacity
-                    style={styles.removeStopBtn}
-                    onPress={() => deleteDraftStop(idx)}
+                    style={styles.mapPickerButton}
+                    onPress={() => handleOpenPicker('destination')}
+                    accessibilityLabel="Hedefi haritadan seç"
                   >
-                    <MaterialIcons name="close" size={16} color={C.error} />
+                    <MaterialIcons name="map" size={19} color={C.primary} />
                   </TouchableOpacity>
                 </View>
-              ))}
+              </View>
             </View>
+
+            {showSearchResults && (
+              <View style={styles.searchResultsCard}>
+                {isSearching ? (
+                  <ActivityIndicator size="small" color={C.primary} />
+                ) : searchResults.length > 0 ? (
+                  searchResults.slice(0, 4).map((place) => (
+                    <TouchableOpacity
+                      key={`${place.name}-${place.lat}-${place.lng}`}
+                      style={styles.searchResultItem}
+                      onPress={() => handleSelectDestination(place)}
+                      accessibilityRole="button"
+                    >
+                      <View style={styles.searchResultIcon}>
+                        <MaterialIcons name="place" size={18} color={C.primary} />
+                      </View>
+                      <View style={styles.searchResultText}>
+                        <Text style={styles.searchResultTitle} numberOfLines={1}>{place.name}</Text>
+                        <Text style={styles.searchResultSubtitle} numberOfLines={1}>
+                          {place.vicinity || 'Harita konumu'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <Text style={styles.emptySearchText}>Sonuç bulunamadı</Text>
+                )}
+              </View>
+            )}
+
+            {/* Primary Action Button */}
+            <TouchableOpacity
+              style={[styles.optimizeButton, isJourneyLoading && styles.optimizeButtonDisabled]}
+              onPress={handleOptimizeNow}
+              disabled={isJourneyLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Yolculuğu optimize et"
+            >
+              <MaterialIcons name="route" size={24} color={C.onPrimary} />
+              <Text style={styles.optimizeButtonText}>Yolculuğu Optimize Et</Text>
+            </TouchableOpacity>
+          </View>
           )}
-
-          {/* Action Pills Row: Haritadan Durak Ekle, Durak Listesi & Tercihler */}
-          <View style={styles.actionPillsRow}>
-            <TouchableOpacity
-              style={styles.addStopPill}
-              activeOpacity={0.8}
-              onPress={() => router.push('/(tabs)/journey/new-stop' as any)}
-            >
-              <MaterialIcons name="add-location-alt" size={18} color={C.primary} />
-              <Text style={styles.addStopPillText}>
-                {draftStops.length > 0 ? `Duraklar (${draftStops.length})` : 'Durak Ekle'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.mapStopPill}
-              activeOpacity={0.8}
-              onPress={() => handleOpenPicker('stop')}
-            >
-              <MaterialIcons name="pin-drop" size={18} color={C.secondary} />
-              <Text style={styles.mapStopPillText}>Haritadan Durak</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.prefPill}
-              activeOpacity={0.8}
-              onPress={() => router.push('/(tabs)/journey/preferences' as any)}
-            >
-              <MaterialIcons name="tune" size={18} color={C.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* AI Assistant Banner */}
-          <TouchableOpacity
-            style={styles.aiAssistantCard}
-            activeOpacity={0.9}
-            onPress={() => router.push('/(tabs)/journey/nlp-input' as any)}
-          >
-            <View style={styles.aiSparkleIcon}>
-              <MaterialIcons name="auto-awesome" size={20} color={C.onPrimary} />
-            </View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.aiTitle}>Günümü Anlat (AI Asistan)</Text>
-              <Text style={styles.aiDesc}>
-                Planınızı serbest metinle yazın; yapay zeka durakları ve saatleri otomatik çıkarsın.
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color={C.primary} />
-          </TouchableOpacity>
-
-          {/* Recent Destinations (Son Aramalar) */}
-          <View style={styles.recentSection}>
-            <Text style={styles.sectionHeading}>SON ARAMALAR</Text>
-            <View style={styles.recentList}>
-              {recentDestinations.map((item, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.recentItem}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    setDestinationQuery(item.title);
-                    setDraftDestination({
-                      latitude: item.lat,
-                      longitude: item.lng,
-                      address: item.title,
-                    });
-                    router.push({
-                      pathname: '/(tabs)/journey/stop-detail' as any,
-                      params: {
-                        placeName: item.title,
-                        lat: String(item.lat),
-                        lng: String(item.lng),
-                      },
-                    });
-                  }}
-                >
-                  <View style={styles.recentIconBg}>
-                    <MaterialIcons name="history" size={18} color={C.textSecondary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.recentItemTitle}>{item.title}</Text>
-                    <Text style={styles.recentItemSub}>{item.subtitle}</Text>
-                  </View>
-                  <MaterialIcons name="north-west" size={16} color={C.outline} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
         </Animated.View>
-      </ScrollView>
 
-      {/* Floating Bottom Primary CTA: Yolculuğu Optimize Et */}
-      <View style={styles.stickyFooter}>
-        <Button
-          label={isJourneyLoading ? 'Optimize Ediliyor...' : 'Yolculuğu Optimize Et'}
-          variant="primary"
-          size="lg"
-          fullWidth
-          icon="alt-route"
-          loading={isJourneyLoading}
-          onPress={handleOptimizeNow}
-        />
+        {/* Space for map interaction */}
+        <View style={styles.flexGrowSpacer} pointerEvents="none" />
+
+        {/* Bottom Floating Area */}
+        <View
+          style={[
+            styles.bottomFloatingContainer,
+            { paddingBottom: Platform.OS === 'ios' ? 120 : 100 },
+          ]}
+          pointerEvents="box-none"
+        >
+          {/* Active Journey Banner Floating above tabs if exists */}
+          {currentJourney?.status === 'active' && (
+            <TouchableOpacity
+              style={styles.activeBannerFloating}
+              activeOpacity={0.9}
+              onPress={() => router.push('/(tabs)/journey/active-journey' as any)}
+            >
+              <Animated.View style={[styles.activePulse, { transform: [{ scale: pulseAnim }] }]}>
+                <View style={styles.activeDot} />
+              </Animated.View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.activeTitle}>Devam Eden Yolculuk</Text>
+                <Text style={styles.activeSub} numberOfLines={1}>
+                  {currentJourney.startAddressText || 'Aktif Rota'}
+                </Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={C.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-      </KeyboardAvoidingView>
+
+      {/* Loading Overlay */}
+      {isJourneyLoading && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={C.primary} style={{ marginBottom: 16 }} />
+            <Text style={styles.loadingTitle}>Akıllı Optimizasyon</Text>
+            <Text style={styles.loadingText}>{loadingMessages[loadingStep]}</Text>
+          </View>
+        </View>
+      )}
+
 
       {/* Interactive Map Location Picker Modal */}
       <MapLocationPickerModal
@@ -674,93 +605,117 @@ export default function JourneyIndexScreen() {
           pickerMode === 'start'
             ? userCoords
             : draftDestination
-            ? { latitude: draftDestination.latitude, longitude: draftDestination.longitude }
-            : userCoords
+              ? { latitude: draftDestination.latitude, longitude: draftDestination.longitude }
+              : userCoords
         }
         initialAddress={pickerMode === 'start' ? startAddress : undefined}
         onSelectLocation={handlePickerSelect}
       />
-    </SafeAreaView>
+
+      {/* Favorites Modal */}
+      <FavoritesModal
+        visible={favoritesModalVisible}
+        onClose={() => setFavoritesModalVisible(false)}
+        onSelect={(lat, lng, address, name, type) => {
+          if (type === 'start') {
+            setUserCoords({ latitude: lat, longitude: lng });
+            setStartAddress(name);
+            setDraftStartLocation({ latitude: lat, longitude: lng, address: name });
+          } else if (type === 'destination') {
+            setDestinationQuery(name);
+            setDraftDestination({ latitude: lat, longitude: lng, address: name });
+          } else if (type === 'stop') {
+            router.push({
+              pathname: '/(tabs)/journey/stop-detail' as any,
+              params: { placeName: name, lat: String(lat), lng: String(lng) },
+            });
+          }
+        }}
+      />
+
+      {/* Side Menu */}
+      <JourneySideMenu
+        visible={sideMenuVisible}
+        onClose={() => setSideMenuVisible(false)}
+        onNavigate={(route) => router.push(route as any)}
+        onOpenFavorites={() => setFavoritesModalVisible(true)}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: C.background,
   },
-  header: {
-    height: 56,
+  mapBackground: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
+  mapOverlayGradient: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(250, 248, 255, 0.15)', // Very light opacity so map is clear
+  },
+  safeAreaOverlay: {
+    flex: 1,
+    zIndex: 10,
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  topContainer: {
+    paddingHorizontal: Spacing.marginMain,
+    paddingTop: Spacing.sm,
+  },
+  floatingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.gutter,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.outlineVariant,
+    borderRadius: 100,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+    minHeight: 56,
+    ...Shadow.md,
   },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  logoBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: Rounded.md,
-    backgroundColor: C.primary,
+  headerIcon: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: C.surfaceContainerLowest,
   },
-  brandTitle: {
-    ...Typography.h3,
-    color: C.text,
-  },
-  avatarButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: C.primary,
+  headerTitleBox: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.sm,
   },
-  scroll: {
-    paddingBottom: TabBarHeight + 90,
+  headerTitle: {
+    ...Typography.h4,
+    color: C.onSurface,
+    fontWeight: '700',
   },
-  titleSection: {
-    paddingHorizontal: Spacing.gutter,
-    paddingTop: Spacing.base,
-    paddingBottom: Spacing.sm,
+  flexGrowSpacer: {
+    flex: 1,
   },
-  pageTitle: {
-    ...Typography.h1,
-    color: C.text,
-  },
-  pageSubtitle: {
-    ...Typography.bodySmall,
-    color: C.textSecondary,
-    marginTop: 2,
-  },
-  // Active banner
-  activeBanner: {
-    marginHorizontal: Spacing.gutter,
+  activeBannerFloating: {
+    marginHorizontal: Spacing.marginMain,
     marginBottom: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: C.primaryFixed,
+    backgroundColor: C.surface,
     borderRadius: Rounded.xl,
     padding: Spacing.md,
     gap: Spacing.md,
     borderLeftWidth: 4,
     borderLeftColor: C.primary,
-    ...Shadow.sm,
+    ...Shadow.lg,
   },
   activePulse: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: C.surface,
+    backgroundColor: C.primaryFixed,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -781,403 +736,303 @@ const styles = StyleSheet.create({
     color: C.text,
     fontWeight: '600',
   },
-  // Map
-  mapWrapper: {
-    position: 'relative',
-    marginHorizontal: Spacing.gutter,
-    borderRadius: Rounded['2xl'],
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: C.outlineVariant,
-    ...Shadow.md,
+  bottomFloatingContainer: {
+    width: '100%',
+    paddingHorizontal: Spacing.marginMain,
+    paddingBottom: Platform.OS === 'ios' ? 96 : 76,
   },
-  mapPillOverlay: {
-    position: 'absolute',
-    top: Spacing.sm,
-    left: Spacing.sm,
+  chipsScroll: {
+    gap: Spacing.sm,
+    paddingBottom: Spacing.sm,
   },
-  mapPill: {
+  chipActive: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: Rounded.full,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: C.outlineVariant,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+    borderRadius: 100,
+    gap: Spacing.xs,
+    ...Shadow.sm,
   },
-  liveIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: C.secondary,
+  chipActiveText: {
+    ...Typography.label,
+    color: C.primary,
   },
-  mapPillText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: C.text,
+  chipInactive: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+    borderRadius: 100,
+    gap: Spacing.xs,
+    ...Shadow.sm,
   },
-  // Sheet card
-  sheetCard: {
-    marginHorizontal: Spacing.gutter,
+  chipInactiveText: {
+    ...Typography.label,
+    color: C.onSurfaceVariant,
+  },
+  planRouteFabContainer: {
+    alignItems: 'flex-end',
     marginTop: Spacing.md,
-    backgroundColor: C.surface,
-    borderRadius: Rounded['2xl'],
-    padding: Spacing.base,
-    ...Shadow.lg,
-    borderWidth: 1,
-    borderColor: C.outlineVariant,
   },
-  handleBar: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: C.outlineVariant,
-    alignSelf: 'center',
-    marginBottom: Spacing.base,
-  },
-  locationFieldRow: {
+  planRouteFab: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: C.surfaceLow,
-    borderRadius: Rounded.xl,
-    padding: Spacing.md,
-    gap: Spacing.md,
-  },
-  startDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: C.secondaryFixedDim,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  startDotInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: C.secondary,
-  },
-  fieldContent: {
-    flex: 1,
-  },
-  fieldLabel: {
-    ...Typography.caption,
-    color: C.textSecondary,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    fontWeight: '600',
-  },
-  fieldText: {
-    ...Typography.bodyMedium,
-    color: C.text,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  connectorLine: {
-    width: 2,
-    height: 14,
-    backgroundColor: C.outlineVariant,
-    marginLeft: 21,
-    marginVertical: 2,
-  },
-  destinationFieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.surfaceLow,
-    borderRadius: Rounded.xl,
-    padding: Spacing.md,
-    gap: Spacing.md,
-  },
-  destPin: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
     backgroundColor: C.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderRadius: Rounded.full,
+    gap: Spacing.sm,
+    ...Shadow.lg,
   },
-  destinationInput: {
+  planRouteFabText: {
+    ...Typography.button,
+    color: C.onPrimary,
+  },
+  closeCardBtn: {
+    padding: 4,
+    borderRadius: 16,
+    backgroundColor: C.surfaceContainer,
+  },
+  routingCardGlass: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: Rounded['2xl'],
+    padding: Spacing.lg,
+    maxWidth: 560,
+    width: '100%',
+    alignSelf: 'center',
+    ...Shadow.xl,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+  },
+  cardHeaderTitle: {
     ...Typography.bodyMedium,
-    color: C.text,
-    fontWeight: '500',
-    padding: 0,
-    marginTop: 2,
+    fontWeight: '700',
+    color: C.onSurface,
   },
-  // Dropdown search
-  searchResultsDropdown: {
-    backgroundColor: C.surface,
-    borderRadius: Rounded.xl,
-    borderWidth: 1,
-    borderColor: C.outlineVariant,
-    marginTop: Spacing.sm,
-    overflow: 'hidden',
-    ...Shadow.md,
-  },
-  searchLoading: {
+  addStopSmallBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.base,
-    gap: Spacing.sm,
-    justifyContent: 'center',
-  },
-  searchLoadingText: {
-    ...Typography.bodySmall,
-    color: C.textSecondary,
-  },
-  searchResultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    gap: Spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.outlineVariant,
-  },
-  resultItemTitle: {
-    ...Typography.bodyMedium,
-    color: C.text,
-    fontWeight: '600',
-  },
-  resultItemSubtitle: {
-    ...Typography.caption,
-    color: C.textSecondary,
-    marginTop: 1,
-  },
-  noResultBox: {
-    padding: Spacing.base,
-    alignItems: 'center',
-  },
-  noResultText: {
-    ...Typography.bodySmall,
-    color: C.textSecondary,
-    fontStyle: 'italic',
-  },
-  // Action pills
-  actionPillsRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-  addStopPill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: C.primaryFixed,
-    borderRadius: Rounded.xl,
-    paddingVertical: 10,
-    gap: 6,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: Rounded.full,
+    gap: 4,
   },
-  addStopPillText: {
-    ...Typography.bodySmall,
+  addStopSmallText: {
+    ...Typography.caption,
     color: C.primary,
     fontWeight: '700',
   },
-  prefPill: {
+  inputArea: {
+    position: 'relative',
+    gap: Spacing.base,
+    marginBottom: Spacing.xl,
+  },
+  verticalDashedLine: {
+    position: 'absolute',
+    left: 15,
+    top: 24,
+    bottom: 24,
+    width: 2,
+    borderLeftWidth: 1,
+    borderLeftColor: C.outlineVariant,
+    borderStyle: 'dashed',
+    opacity: 0.5,
+  },
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: C.surfaceLow,
-    borderRadius: Rounded.xl,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    gap: 6,
-  },
-  prefPillText: {
-    ...Typography.bodySmall,
-    color: C.textSecondary,
-    fontWeight: '600',
-  },
-  // AI assistant banner
-  aiAssistantCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.primaryContainer,
-    borderRadius: Rounded.xl,
-    padding: Spacing.base,
     gap: Spacing.md,
-    marginTop: Spacing.md,
-    ...Shadow.sm,
   },
-  aiSparkleIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  startDotBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(59, 53, 208, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
   },
-  aiTitle: {
+  startDotInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: C.primary,
+  },
+  locationBox: {
+    flex: 1,
+    backgroundColor: C.surfaceContainerLow,
+    borderRadius: Rounded.xl,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  locationText: {
     ...Typography.bodyMedium,
-    color: C.onPrimary,
-    fontWeight: '700',
+    color: C.onSurface,
   },
-  aiDesc: {
-    ...Typography.caption,
-    color: 'rgba(255, 255, 255, 0.85)',
-    lineHeight: 16,
+  endPinBadge: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
-  // Recent section
-  recentSection: {
-    marginTop: Spacing.base,
+  locationBoxEnd: {
+    flex: 1,
+    backgroundColor: C.surfaceContainer,
+    borderRadius: Rounded.xl,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 52,
+  },
+  destinationInput: {
+    ...Typography.bodyMedium,
+    color: C.onSurface,
+    flex: 1,
+    minWidth: 0,
+    padding: 0,
+  },
+  mapPickerButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    marginLeft: Spacing.xs,
+    backgroundColor: C.primaryFixed,
+  },
+  locationTextPlaceholder: {
+    ...Typography.bodyMedium,
+    color: C.onSurfaceVariant,
+  },
+  searchResultsCard: {
+    marginTop: -Spacing.sm,
+    marginLeft: 48,
+    backgroundColor: C.surface,
+    borderRadius: Rounded.lg,
+    paddingVertical: Spacing.xs,
+    maxHeight: 220,
+    ...Shadow.md,
+  },
+  searchResultItem: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm,
     gap: Spacing.sm,
   },
-  sectionHeading: {
-    ...Typography.caption,
-    fontWeight: '700',
-    color: C.outline,
-    letterSpacing: 0.8,
+  searchResultIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.primaryFixed,
   },
-  recentList: {
+  searchResultText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  searchResultTitle: {
+    ...Typography.bodySmall,
+    color: C.onSurface,
+    fontWeight: '700',
+  },
+  searchResultSubtitle: {
+    ...Typography.caption,
+    color: C.onSurfaceVariant,
+    marginTop: 2,
+  },
+  emptySearchText: {
+    ...Typography.bodySmall,
+    color: C.onSurfaceVariant,
+    padding: Spacing.md,
+    textAlign: 'center',
+  },
+  recentDestinationsBlock: {
     gap: Spacing.xs,
+    marginBottom: Spacing.xl,
   },
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: C.surfaceLow,
+    padding: Spacing.sm,
+    gap: Spacing.base,
     borderRadius: Rounded.lg,
-    padding: Spacing.md,
-    gap: Spacing.md,
   },
-  recentIconBg: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: C.surface,
+  recentIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: C.surfaceContainer,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  recentItemTitle: {
-    ...Typography.bodySmall,
-    fontWeight: '600',
-    color: C.text,
+  recentTexts: {
+    flex: 1,
   },
-  recentItemSub: {
+  recentTitle: {
+    ...Typography.h4,
+    color: C.onSurface,
+  },
+  recentSubtitle: {
     ...Typography.caption,
-    color: C.textSecondary,
+    color: C.onSurfaceVariant,
     marginTop: 2,
   },
-  // Draft stops list
-  draftStopsContainer: {
-    marginTop: Spacing.md,
-    backgroundColor: C.surface,
+  optimizeButton: {
+    width: '100%',
+    backgroundColor: C.primary,
+    paddingVertical: Spacing.base,
     borderRadius: Rounded.xl,
-    padding: Spacing.base,
-    ...Shadow.sm,
-    borderWidth: 1,
-    borderColor: C.outlineVariant,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    ...Shadow.primary,
   },
-  draftStopsHeader: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
+  optimizeButtonText: {
+    ...Typography.button,
+    color: C.onPrimary,
+  },
+  optimizeButtonDisabled: {
+    opacity: 0.65,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(250, 248, 255, 0.8)',
+    zIndex: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingCard: {
+    backgroundColor: C.surface,
+    padding: Spacing.xl,
+    borderRadius: Rounded['2xl'],
+    alignItems: 'center',
+    ...Shadow.xl,
+  },
+  loadingTitle: {
+    ...Typography.h3,
+    color: C.text,
     marginBottom: Spacing.sm,
   },
-  draftStopsTitle: {
-    ...Typography.caption,
-    fontWeight: '700' as const,
-    color: C.outline,
-    letterSpacing: 0.8,
-  },
-  clearStopsText: {
-    ...Typography.caption,
-    color: C.error,
-    fontWeight: '600' as const,
-  },
-  draftStopRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    paddingVertical: Spacing.xs,
-    gap: Spacing.sm,
-  },
-  draftStopBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: C.primaryFixed,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  draftStopBadgeText: {
-    ...Typography.caption,
-    fontWeight: '700' as const,
-    color: C.primary,
-  },
-  draftStopName: {
+  loadingText: {
     ...Typography.bodySmall,
-    fontWeight: '600' as const,
-    color: C.text,
-  },
-  draftStopMeta: {
-    ...Typography.caption,
-    color: C.textSecondary,
-    marginTop: 1,
-  },
-  removeStopBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: C.surfaceLow,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  // Map stop pill (duplicate for separate styling)
-  mapStopPill: {
-    flex: 1,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    backgroundColor: C.surfaceLow,
-    borderRadius: Rounded.xl,
-    paddingVertical: 10,
-    gap: 6,
-  },
-  mapStopPillText: {
-    ...Typography.bodySmall,
-    color: C.text,
-    fontWeight: '600' as const,
-  },
-  editMapBadge: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: C.primaryFixed,
-    borderRadius: Rounded.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    gap: 3,
-  },
-  editMapBadgeText: {
-    ...Typography.caption,
     color: C.primary,
-    fontWeight: '600' as const,
-    fontSize: 11,
-  },
-  pickMapButton: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: C.primaryFixed,
-    borderRadius: Rounded.full,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    gap: 4,
-  },
-  pickMapButtonText: {
-    ...Typography.caption,
-    color: C.primary,
-    fontWeight: '600' as const,
-    fontSize: 11,
-  },
-  // Sticky footer
-  stickyFooter: {
-    position: 'absolute',
-    bottom: TabBarHeight,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Spacing.gutter,
-    paddingVertical: Spacing.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.outlineVariant,
+    fontWeight: '600',
   },
 });
+

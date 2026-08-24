@@ -49,7 +49,7 @@ public class JourneyPlan {
     @Column(name = "is_selected", nullable = false)
     private Boolean isSelected = false;
 
-    @Column(name = "explanation_text")
+    @Column(name = "explanation_text", columnDefinition = "TEXT")
     private String explanationText;
 
     @Column(name = "created_at", nullable = false, updatable = false)

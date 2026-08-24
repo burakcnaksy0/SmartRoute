@@ -8,6 +8,13 @@ import java.util.List;
 @Service
 public class ExplainabilityService {
 
+    private String appendMsg(String existing, String newMsg) {
+        if (existing == null || existing.isBlank()) {
+            return newMsg;
+        }
+        return newMsg + "\n" + existing;
+    }
+
     public String generateExplanation(JourneyPlan current, JourneyPlan other) {
         if (current == null || other == null) {
             return "Tercihlerinize en uygun rota.";
@@ -69,7 +76,7 @@ public class ExplainabilityService {
         }
 
         if (plans.size() == 1) {
-            plans.get(0).setExplanationText("Tercihlerinize en uygun rota.");
+            plans.get(0).setExplanationText(appendMsg(plans.get(0).getExplanationText(), "Tercihlerinize en uygun rota."));
             return;
         }
 
@@ -97,7 +104,7 @@ public class ExplainabilityService {
 
         if (allSimilar) {
             for (JourneyPlan plan : plans) {
-                plan.setExplanationText("Rotalar oldukça benzer, herhangi birini seçebilirsiniz.");
+                plan.setExplanationText(appendMsg(plan.getExplanationText(), "Rotalar oldukça benzer, herhangi birini seçebilirsiniz."));
             }
             return;
         }
@@ -109,10 +116,10 @@ public class ExplainabilityService {
                         .filter(p -> p != recommended)
                         .findFirst()
                         .orElse(null);
-                plan.setExplanationText(generateExplanation(plan, alternative));
+                plan.setExplanationText(appendMsg(plan.getExplanationText(), generateExplanation(plan, alternative)));
             } else {
                 // Compare alternative plan against recommended
-                plan.setExplanationText(generateExplanation(plan, recommended));
+                plan.setExplanationText(appendMsg(plan.getExplanationText(), generateExplanation(plan, recommended)));
             }
         }
     }
