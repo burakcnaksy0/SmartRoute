@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
 import MapLocationView from '@/components/MapLocationView';
+import placesApi from '@/api/places';
 
 const C = Colors.light;
 
@@ -108,7 +109,13 @@ export default function ActiveJourneyScreen() {
     triggerReplan,
     confirmReplan,
     cancelReplan,
+    optimizeJourney,
+    startJourney,
   } = useJourneyStore();
+
+  const [poiModalVisible, setPoiModalVisible] = useState(false);
+  const [poiList, setPoiList] = useState<any[]>([]);
+  const [isPoiLoading, setIsPoiLoading] = useState(false);
 
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number }>({
     latitude: currentJourney?.startLat ?? 41.0082,
@@ -154,6 +161,34 @@ export default function ActiveJourneyScreen() {
   const stopsSorted = [...(currentJourney?.stops ?? [])].sort(
     (a, b) => (a.optimizedOrder ?? a.sequenceOrder) - (b.optimizedOrder ?? b.sequenceOrder)
   );
+
+  // Add a pseudo-stop for the destination or return-to-start so it renders in the UI
+  if (currentJourney?.destinationLat && currentJourney?.destinationLng) {
+    stopsSorted.push({
+      id: 'destination-stop',
+      placeName: currentJourney.destinationAddressText || 'Hedef',
+      lat: currentJourney.destinationLat,
+      lng: currentJourney.destinationLng,
+      visitDurationMinutes: 0,
+      priority: 'normal',
+      stopType: 'destination',
+      sequenceOrder: 9999,
+      optimizedOrder: 9999,
+    });
+  } else if (selectedPlan?.legs?.length > (currentJourney?.stops?.length ?? 0)) {
+    // Return to start case
+    stopsSorted.push({
+      id: 'destination-stop',
+      placeName: currentJourney?.startAddressText || 'Başlangıç (Dönüş)',
+      lat: currentJourney?.startLat ?? 0,
+      lng: currentJourney?.startLng ?? 0,
+      visitDurationMinutes: 0,
+      priority: 'normal',
+      stopType: 'destination',
+      sequenceOrder: 9999,
+      optimizedOrder: 9999,
+    });
+  }
 
   const completedCount = completedStopIds.length;
   const totalCount = stopsSorted.length;
@@ -202,6 +237,52 @@ export default function ActiveJourneyScreen() {
     }
   };
 
+  const handleSearchFuel = async () => {
+    setIsPoiLoading(true);
+    setPoiModalVisible(true);
+    const results = await placesApi.getNearby(userLocation.latitude, userLocation.longitude, 5000, 'fuel');
+    setPoiList(results);
+    setIsPoiLoading(false);
+  };
+
+  const handleAddFuelToRoute = async (place: any) => {
+    if (!currentJourney) return;
+    setPoiModalVisible(false);
+    
+    const uncompletedStops = (currentJourney.stops || [])
+      .filter((s) => !completedStopIds.includes(s.id))
+      .map(s => ({
+        placeName: s.placeName,
+        lat: s.lat,
+        lng: s.lng,
+        visitDurationMinutes: s.visitDurationMinutes,
+        timeWindowStart: s.timeWindowStart,
+        timeWindowEnd: s.timeWindowEnd,
+        priority: s.priority as any,
+        stopType: s.stopType as any
+      }));
+      
+    uncompletedStops.push({
+      placeName: place.name,
+      lat: place.lat,
+      lng: place.lng,
+      visitDurationMinutes: 15,
+      priority: 'normal',
+      stopType: 'poi'
+    });
+
+    const success = await optimizeJourney(currentJourney.id, {
+      startLocation: { lat: userLocation.latitude, lng: userLocation.longitude },
+      stops: uncompletedStops,
+      returnToStart: false
+    });
+
+    if (success) {
+      startJourney();
+      Alert.alert('Rotaya Eklendi', `${place.name} rotanıza başarıyla eklendi.`);
+    }
+  };
+
   // Decode route polylines
   const selectedPlan = currentJourney?.plans.find((p) => p.isSelected) || currentJourney?.plans[0];
   const polylinePoints =
@@ -210,11 +291,25 @@ export default function ActiveJourneyScreen() {
       return decodePolyline(leg.polylineEncoded);
     }) ?? [];
 
-  // Real ETA calculation based on plan legs
+  // Real ETA calculation based on plan legs and remaining visit durations
   let remainingSeconds = 0;
   if (selectedPlan && selectedPlan.legs) {
-    const remainingLegs = selectedPlan.legs.filter((leg: any) => !leg.toStop || !completedStopIds.includes(leg.toStop.id));
-    remainingSeconds = remainingLegs.reduce((acc: number, leg: any) => acc + leg.durationSeconds, 0);
+    const remainingLegs = selectedPlan.legs.filter((leg: any) => {
+      if (leg.toStopId) {
+        return !completedStopIds.includes(leg.toStopId);
+      } else {
+        return !completedStopIds.includes('destination-stop');
+      }
+    });
+    
+    remainingSeconds = remainingLegs.reduce((acc: number, leg: any) => {
+      let legTotal = leg.durationSeconds;
+      if (leg.toStopId) {
+        const stopObj = currentJourney?.stops?.find(s => s.id === leg.toStopId);
+        legTotal += (stopObj?.visitDurationMinutes || 0) * 60;
+      }
+      return acc + legTotal;
+    }, 0);
   }
   const remainingMinutes = Math.round(remainingSeconds / 60);
   const targetArrival = new Date(Date.now() + remainingSeconds * 1000);
@@ -245,10 +340,22 @@ export default function ActiveJourneyScreen() {
         title="Aktif Navigasyon"
         rightComponent={
           <TouchableOpacity
-            onPress={() => router.replace('/(tabs)/journey')}
+            onPress={() => {
+              Alert.alert('Yolculuğu Bitir', 'Mevcut yolculuğu sonlandırmak istediğinize emin misiniz?', [
+                { text: 'Vazgeç', style: 'cancel' },
+                { 
+                  text: 'Bitir', 
+                  style: 'destructive', 
+                  onPress: () => {
+                    useJourneyStore.getState().reset();
+                    router.replace('/(tabs)/journey');
+                  } 
+                },
+              ]);
+            }}
             style={styles.closeBtn}
           >
-            <Text style={styles.closeBtnText}>Bitti</Text>
+            <Text style={styles.closeBtnText}>Bitir</Text>
           </TouchableOpacity>
         }
       />
@@ -381,6 +488,16 @@ export default function ActiveJourneyScreen() {
           {/* Alternative Route & Replan Actions */}
           <View style={styles.hudActionsRow}>
             <Button
+              label="Yakındaki Akaryakıt İstasyonunu Bul"
+              icon="local-gas-station"
+              variant="primary"
+              size="md"
+              fullWidth
+              loading={isPoiLoading}
+              onPress={handleSearchFuel}
+              style={{ marginBottom: Spacing.sm }}
+            />
+            <Button
               label="Trafik / Alt. Rota Kontrolü"
               icon="traffic"
               variant="outline"
@@ -466,6 +583,41 @@ export default function ActiveJourneyScreen() {
                 style={{ flex: 1 }}
               />
             </View>
+          </View>
+        </View>
+      )}
+
+      {/* POI Search Modal Overlay */}
+      {poiModalVisible && (
+        <View style={styles.overlayBg}>
+          <View style={styles.replanSheet}>
+            <View style={styles.replanHandle} />
+            <View style={styles.replanHeader}>
+              <View style={[styles.replanIconBg, { backgroundColor: C.primaryFixed }]}>
+                <MaterialIcons name="local-gas-station" size={24} color={C.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.replanTitle}>Yakındaki İstasyonlar</Text>
+                <Text style={styles.replanSub}>Aracınız için en yakın seçenekler</Text>
+              </View>
+            </View>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {poiList.map((poi, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.poiItem}
+                  onPress={() => handleAddFuelToRoute(poi)}
+                >
+                  <MaterialIcons name="local-gas-station" size={24} color={C.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.poiName}>{poi.name}</Text>
+                    <Text style={styles.poiAddr}>{poi.vicinity}</Text>
+                  </View>
+                  <MaterialIcons name="add-circle-outline" size={24} color={C.secondary} />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <Button label="Kapat" variant="secondary" size="md" onPress={() => setPoiModalVisible(false)} />
           </View>
         </View>
       )}

@@ -562,25 +562,6 @@ export default function JourneyIndexScreen() {
           ]}
           pointerEvents="box-none"
         >
-          {/* Active Journey Banner Floating above tabs if exists */}
-          {currentJourney?.status === 'active' && (
-            <TouchableOpacity
-              style={styles.activeBannerFloating}
-              activeOpacity={0.9}
-              onPress={() => router.push('/(tabs)/journey/active-journey' as any)}
-            >
-              <Animated.View style={[styles.activePulse, { transform: [{ scale: pulseAnim }] }]}>
-                <View style={styles.activeDot} />
-              </Animated.View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.activeTitle}>Devam Eden Yolculuk</Text>
-                <Text style={styles.activeSub} numberOfLines={1}>
-                  {currentJourney.startAddressText || 'Aktif Rota'}
-                </Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={C.primary} />
-            </TouchableOpacity>
-          )}
         </View>
       </View>
 

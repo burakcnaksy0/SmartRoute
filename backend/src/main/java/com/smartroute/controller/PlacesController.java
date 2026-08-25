@@ -53,4 +53,13 @@ public class PlacesController {
             @RequestParam(defaultValue = "2000") int radius) {
         return ResponseEntity.ok(placesService.getRecommendations(lat, lng, radius));
     }
+
+    @GetMapping("/nearby")
+    public ResponseEntity<List<com.smartroute.service.places.GooglePlaceResult>> getNearby(
+            @RequestParam double lat,
+            @RequestParam double lng,
+            @RequestParam(defaultValue = "5000") int radius,
+            @RequestParam String type) {
+        return ResponseEntity.ok(placesService.getNearby(lat, lng, radius, type));
+    }
 }

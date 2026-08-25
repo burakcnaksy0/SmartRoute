@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
+  Alert,
 } from 'react-native';
 import { useJourneyStore } from '@/store/journeyStore';
 import { useRef, useEffect } from 'react';
@@ -147,8 +148,22 @@ export default function TabLayout() {
                 </Text>
               </View>
             </View>
-            <View style={styles.stripChevron}>
-              <MaterialIcons name="chevron-right" size={20} color={C.primary} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+              <TouchableOpacity
+                style={styles.stripCancelBtn}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  Alert.alert('Yolculuğu Bitir', 'Mevcut yolculuğu sonlandırmak istediğinize emin misiniz?', [
+                    { text: 'Vazgeç', style: 'cancel' },
+                    { text: 'Bitir', style: 'destructive', onPress: () => useJourneyStore.getState().reset() },
+                  ]);
+                }}
+              >
+                <MaterialIcons name="close" size={20} color={C.error} />
+              </TouchableOpacity>
+              <View style={styles.stripChevron}>
+                <MaterialIcons name="chevron-right" size={20} color={C.primary} />
+              </View>
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -250,6 +265,14 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     backgroundColor: C.primaryFixed,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stripCancelBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: C.errorContainer || '#FFDAD6',
     alignItems: 'center',
     justifyContent: 'center',
   },

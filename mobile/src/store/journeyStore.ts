@@ -302,7 +302,23 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
     const journey = get().currentJourney;
     if (!journey) return;
     const completed = [...get().completedStopIds, stopId];
-    const allCompleted = journey.stops.every(s => completed.includes(s.id));
+    
+    let allCompleted = false;
+    const hasDestination = journey.destinationLat != null && journey.destinationLng != null;
+    
+    // Determine if it has a return to start leg
+    // We can infer this if there's no destination, but the selected plan has more legs than stops.
+    const selectedPlan = journey.plans.find(p => p.isSelected) || journey.plans[0];
+    const hasReturnToStart = !hasDestination && selectedPlan && selectedPlan.legs.length > journey.stops.length;
+    
+    if (hasDestination || hasReturnToStart) {
+      const stopsCompleted = journey.stops.every(s => completed.includes(s.id));
+      const destCompleted = completed.includes('destination-stop');
+      allCompleted = stopsCompleted && destCompleted;
+    } else {
+      allCompleted = journey.stops.every(s => completed.includes(s.id));
+    }
+
     set({
       completedStopIds: completed,
       currentJourney: {

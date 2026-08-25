@@ -102,6 +102,18 @@ export const placesApi = {
       return [];
     }
   },
+
+  getNearby: async (lat: number, lng: number, radius: number = 5000, type: string): Promise<PlaceResult[]> => {
+    try {
+      const response = await api.get('/places/nearby', {
+        params: { lat, lng, radius, type },
+      });
+      return response.data || [];
+    } catch (err) {
+      console.warn('placesApi.getNearby error:', err);
+      return [];
+    }
+  },
 };
 
 export default placesApi;

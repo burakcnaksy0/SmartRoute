@@ -386,7 +386,7 @@ public class JourneyPlanningService {
             PlanLeg leg = new PlanLeg();
             leg.setPlan(plan);
             leg.setFromStop(prevStop);
-            leg.setToStop(firstStop); // Points to the first stop to complete the loop
+            leg.setToStop(null); // Return to start has no JourneyStop representation, treat it like destination
             leg.setLegOrder(legOrder++);
             leg.setDistanceMeters(route.getDistanceMeters());
             leg.setDurationSeconds(route.getDurationSeconds());
@@ -426,20 +426,12 @@ public class JourneyPlanningService {
             totalTollCost = totalTollCost.add(route.getTollCost());
         }
 
-        // Simulate profile differences if the routing provider returned identical raw routes
+        // Remove artificial faking multipliers for accuracy
         int adjustedDistance = totalDistance;
         int adjustedDuration = totalDuration;
-        
-        if ("fastest".equalsIgnoreCase(planLabel)) {
-            adjustedDuration = (int) (totalDuration * 0.82); // Faster
-            adjustedDistance = (int) (totalDistance * 1.08); // Longer distance
-        } else if ("cheapest".equalsIgnoreCase(planLabel)) {
-            adjustedDuration = (int) (totalDuration * 1.18); // Slower
-            adjustedDistance = (int) (totalDistance * 0.92); // Shorter distance
+
+        if ("cheapest".equalsIgnoreCase(planLabel)) {
             totalTollCost = BigDecimal.ZERO;
-        } else if ("recommended".equalsIgnoreCase(planLabel)) {
-            adjustedDuration = (int) (totalDuration * 0.95);
-            adjustedDistance = (int) (totalDistance * 0.98);
         }
 
         plan.setTotalDistanceMeters(adjustedDistance);
@@ -499,37 +491,7 @@ public class JourneyPlanningService {
                 fuelCostVal));
         explanation.append("\n📊 Fiyat Kaynağı: ").append(priceSource);
 
-        // Smart Refuel Recommendation - for routes longer than 100 km
-        if (adjustedDistance > 100_000 && !"electric".equalsIgnoreCase(vehicleType)) {
-            java.util.List<FuelPriceService.DistributorPrice> allPrices = fuelPriceService.getAllDistributorPrices();
-            if (!allPrices.isEmpty()) {
-                // Find cheapest and most expensive for comparison
-                String cheapestDist = distributorName;
-                double cheapestPrice = fuelPrice;
-                double mostExpensivePrice = 0;
-                String mostExpensiveDist = "";
-
-                for (FuelPriceService.DistributorPrice dp : allPrices) {
-                    double price = "diesel".equalsIgnoreCase(vehicleType) ? dp.getMotorin()
-                            : "lpg".equalsIgnoreCase(vehicleType) ? dp.getLpg() : dp.getBenzin95();
-                    if (price > 0 && price > mostExpensivePrice) {
-                        mostExpensivePrice = price;
-                        mostExpensiveDist = dp.getDistributor();
-                    }
-                }
-
-                if (mostExpensivePrice > cheapestPrice && !cheapestDist.equals("Genel")) {
-                    double savingsPerLiter = mostExpensivePrice - cheapestPrice;
-                    double totalSavings = fuelConsumed * savingsPerLiter;
-
-                    explanation.append(String.format(
-                            "\n\n💡 Akıllı Yakıt Önerisi: Rota üzerinde yakıtınızı %s istasyonlarından alarak " +
-                                    "₺%.2f/L tasarruf edebilirsiniz (en pahalı %s'e kıyasla). " +
-                                    "Bu rota için toplam ₺%.2f tasarruf!",
-                            cheapestDist, savingsPerLiter, mostExpensiveDist, totalSavings));
-                }
-            }
-        }
+        // Smart Refuel Recommendation is removed as we are now using national average prices instead of per-distributor prices
 
         plan.setExplanationText(explanation.toString());
 
@@ -846,13 +808,10 @@ public class JourneyPlanningService {
             if (!routeCandidates.isEmpty()) {
                 RouteCandidate route = routeCandidates.get(0);
 
-                // Point to the first stop in the remaining sequence or loop
-                JourneyStop firstStop = remainingStops.get(bestPerm.get(0) - 1);
-
                 PlanLeg leg = new PlanLeg();
                 leg.setPlan(plan);
                 leg.setFromStop(prevStop);
-                leg.setToStop(firstStop);
+                leg.setToStop(null); // Return to start has no JourneyStop representation, treat it like destination
                 leg.setLegOrder(legOrder++);
                 leg.setDistanceMeters(route.getDistanceMeters());
                 leg.setDurationSeconds(route.getDurationSeconds());

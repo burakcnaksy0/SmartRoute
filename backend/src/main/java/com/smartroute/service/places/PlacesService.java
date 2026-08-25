@@ -249,4 +249,8 @@ public class PlacesService {
         LocationResult loc = geocodingProvider.reverseGeocode(lat, lng);
         return loc != null ? loc.getFormattedAddress() : "Unknown Location";
     }
+
+    public List<GooglePlaceResult> getNearby(double lat, double lng, int radius, String type) {
+        return osmPlacesProvider.searchNearby(lat, lng, radius, type);
+    }
 }

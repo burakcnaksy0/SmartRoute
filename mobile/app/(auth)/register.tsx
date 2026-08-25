@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,7 +9,6 @@ import {
   ScrollView,
   Animated,
   Easing,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -21,8 +20,19 @@ import { Colors, Spacing, Rounded, Shadow, Typography } from '@/constants/theme'
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ErrorBanner } from '@/components/ui/States';
+import { OrbitRing } from '@/components/ui/OrbitRing';
+import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 
 const C = Colors.light;
+
+const VEHICLE_TYPES = [
+  { id: 'gasoline', name: 'Benzinli', icon: 'directions-car' as const },
+  { id: 'diesel', name: 'Dizel', icon: 'local-gas-station' as const },
+  { id: 'electric', name: 'Elektrikli', icon: 'electric-car' as const },
+  { id: 'hybrid', name: 'Hibrit', icon: 'electric-bolt' as const },
+  { id: 'bicycle', name: 'Bisiklet', icon: 'directions-bike' as const },
+  { id: 'walking', name: 'Yaya', icon: 'directions-walk' as const },
+];
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -32,44 +42,70 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [defaultVehicleType, setDefaultVehicleType] = useState('electric');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(24)).current;
-  const logoAnim = useRef(new Animated.Value(0.86)).current;
-  const blobAnim = useRef(new Animated.Value(0)).current;
+
+  // Entrance choreography
+  const backAnim = useRef(new Animated.Value(0)).current;
+  const logoAnim = useRef(new Animated.Value(0)).current;
+  const headerAnim = useRef(new Animated.Value(0)).current;
+  const fieldAnims = useRef([0, 1, 2, 3, 4].map(() => new Animated.Value(0))).current;
+  const vehicleAnims = useRef(VEHICLE_TYPES.map(() => new Animated.Value(0))).current;
+  const vehiclePop = useRef(VEHICLE_TYPES.map(() => new Animated.Value(1))).current;
+  const footerAnim = useRef(new Animated.Value(0)).current;
+  const errorShake = useRef(new Animated.Value(0)).current;
+  const blobDrift = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 550,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.spring(logoAnim, {
-        toValue: 1,
-        friction: 7,
-        tension: 55,
-        useNativeDriver: true,
-      }),
+    Animated.sequence([
+      Animated.timing(backAnim, { toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.spring(logoAnim, { toValue: 1, useNativeDriver: true, damping: 12, stiffness: 130 }),
+      Animated.timing(headerAnim, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.stagger(
+        70,
+        fieldAnims.map((a) =>
+          Animated.spring(a, { toValue: 1, useNativeDriver: true, damping: 15, stiffness: 160 })
+        )
+      ),
+      Animated.stagger(
+        40,
+        vehicleAnims.map((a) =>
+          Animated.spring(a, { toValue: 1, useNativeDriver: true, damping: 14, stiffness: 180 })
+        )
+      ),
+      Animated.timing(footerAnim, { toValue: 1, duration: 320, useNativeDriver: true }),
     ]).start();
 
-    const blobLoop = Animated.loop(
+    const drift = Animated.loop(
       Animated.sequence([
-        Animated.timing(blobAnim, { toValue: 1, duration: 4200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(blobAnim, { toValue: 0, duration: 4200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(blobDrift, { toValue: 1, duration: 5200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(blobDrift, { toValue: 0, duration: 5200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ])
     );
-    blobLoop.start();
-    return () => blobLoop.stop();
-  }, [blobAnim, fadeAnim, logoAnim, slideAnim]);
+    drift.start();
+    return () => drift.stop();
+  }, []);
+
+  useEffect(() => {
+    if (error) {
+      errorShake.setValue(0);
+      Animated.sequence([
+        Animated.timing(errorShake, { toValue: 1, duration: 55, useNativeDriver: true }),
+        Animated.timing(errorShake, { toValue: -1, duration: 55, useNativeDriver: true }),
+        Animated.timing(errorShake, { toValue: 1, duration: 55, useNativeDriver: true }),
+        Animated.timing(errorShake, { toValue: 0, duration: 55, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [error]);
+
+  const handleSelectVehicle = (id: string, index: number) => {
+    setDefaultVehicleType(id);
+    Animated.sequence([
+      Animated.spring(vehiclePop[index], { toValue: 1.08, useNativeDriver: true, speed: 40, bounciness: 10 }),
+      Animated.spring(vehiclePop[index], { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }),
+    ]).start();
+  };
 
   const handleRegister = async () => {
     setError(null);
@@ -92,11 +128,13 @@ export default function RegisterScreen() {
         fullName: fullName.trim(),
         email: email.trim(),
         password,
+        defaultVehicleType,
       });
       await setAuth(response.accessToken, response.refreshToken, {
         id: response.userId,
         email: response.email,
         fullName: response.fullName,
+        defaultVehicleType,
       });
     } catch (err: any) {
       if (err.response?.data?.error) {
@@ -111,13 +149,21 @@ export default function RegisterScreen() {
     }
   };
 
+  const blobTranslate = blobDrift.interpolate({ inputRange: [0, 1], outputRange: [0, -16] });
+  const shakeTranslate = errorShake.interpolate({ inputRange: [-1, 1], outputRange: [-8, 8] });
+
+  const fieldStyle = (anim: Animated.Value) => ({
+    opacity: anim,
+    transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+  });
+
   return (
-    <Animated.View style={[styles.root, { opacity: fadeAnim }]}>
+    <View style={styles.root}>
       <StatusBar style="dark" />
       <Animated.View
         style={[
           styles.decorBlob,
-          { transform: [{ translateX: blobAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) }, { scale: blobAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }] },
+          { transform: [{ translateX: blobTranslate }, { translateY: blobTranslate }] },
         ]}
       />
 
@@ -132,83 +178,125 @@ export default function RegisterScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Back */}
-            <TouchableOpacity
-              style={styles.backBtn}
-              onPress={() => router.back()}
-              accessibilityRole="button"
-              accessibilityLabel="Geri git"
-            >
-              <MaterialIcons name="chevron-left" size={24} color={C.primary} />
-              <Text style={styles.backText}>Geri</Text>
-            </TouchableOpacity>
+            <Animated.View style={{ opacity: backAnim, alignSelf: 'flex-start' }}>
+              <AnimatedPressable
+                style={styles.backBtn}
+                onPress={() => router.back()}
+                scaleTo={0.9}
+                accessibilityRole="button"
+                accessibilityLabel="Geri git"
+              >
+                <MaterialIcons name="chevron-left" size={24} color={C.primary} />
+                <Text style={styles.backText}>Geri</Text>
+              </AnimatedPressable>
+            </Animated.View>
 
             {/* Header */}
-            <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
-              <Animated.View style={[styles.logoMark, { transform: [{ scale: logoAnim }] }]}>
-                <Image source={require('../../assets/images/icon.png')} style={{ width: 44, height: 44, borderRadius: 10 }} />
+            <View style={styles.header}>
+              <View style={styles.logoWrapper}>
+                <OrbitRing size={92} primaryColor={C.primary} secondaryColor={C.secondary} />
+                <Animated.View
+                  style={[
+                    styles.logoMark,
+                    {
+                      opacity: logoAnim,
+                      transform: [{ scale: logoAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
+                    },
+                  ]}
+                >
+                  <MaterialIcons name="explore" size={28} color={C.onPrimary} />
+                </Animated.View>
+              </View>
+
+              <Animated.View
+                style={{
+                  opacity: headerAnim,
+                  transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+                }}
+              >
+                <Text style={styles.title}>Hesap Oluştur</Text>
+                <Text style={styles.subtitle}>
+                  SmartRoute'a katılın ve rotalarınızı optimize etmeye başlayın
+                </Text>
               </Animated.View>
-              <Text style={styles.title}>Hesap Oluştur</Text>
-              <Text style={styles.subtitle}>
-                SmartRoute'a katılın ve rotalarınızı optimize etmeye başlayın
-              </Text>
-            </Animated.View>
+            </View>
 
             {/* Form */}
-            <Animated.View style={[styles.form, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-              {error && <ErrorBanner message={error} />}
+            <View style={styles.form}>
+              {error && (
+                <Animated.View style={{ transform: [{ translateX: shakeTranslate }] }}>
+                  <ErrorBanner message={error} />
+                </Animated.View>
+              )}
 
-              <Input
-                label="Ad Soyad"
-                icon="person"
-                placeholder="Ahmet Yılmaz"
-                value={fullName}
-                onChangeText={setFullName}
-                autoCapitalize="words"
-                autoCorrect={false}
-                editable={!isLoading}
-              />
+              <Animated.View style={fieldStyle(fieldAnims[0])}>
+                <Input
+                  label="Ad Soyad"
+                  icon="person"
+                  placeholder="Ahmet Yılmaz"
+                  value={fullName}
+                  onChangeText={setFullName}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+              </Animated.View>
 
-              <Input
-                label="E-posta Adresi"
-                icon="email"
-                placeholder="you@example.com"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-              />
+              <Animated.View style={fieldStyle(fieldAnims[1])}>
+                <Input
+                  label="E-posta Adresi"
+                  icon="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+              </Animated.View>
 
-              <Input
-                label="Şifre"
-                icon="lock"
-                iconRight={showPass ? 'visibility-off' : 'visibility'}
-                onIconRightPress={() => setShowPass(v => !v)}
-                placeholder="En az 6 karakter"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPass}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-                hint="En az 6 karakter girilmelidir"
-              />
+              <Animated.View style={fieldStyle(fieldAnims[2])}>
+                <Input
+                  label="Şifre"
+                  icon="lock"
+                  iconRight={showPass ? 'visibility-off' : 'visibility'}
+                  onIconRightPress={() => setShowPass(v => !v)}
+                  placeholder="En az 6 karakter"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPass}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                  hint="En az 6 karakter girilmelidir"
+                />
+              </Animated.View>
 
 
-              <Button
-                label="Hesap Oluştur"
-                onPress={handleRegister}
-                loading={isLoading}
-                disabled={isLoading}
-                fullWidth
-                size="lg"
-                style={{ marginTop: Spacing.sm }}
-              />
-            </Animated.View>
+              <Animated.View style={fieldStyle(fieldAnims[4])}>
+                <Button
+                  label="Hesap Oluştur"
+                  onPress={handleRegister}
+                  loading={isLoading}
+                  disabled={isLoading}
+                  fullWidth
+                  size="lg"
+                  style={{ marginTop: Spacing.sm }}
+                />
+              </Animated.View>
+            </View>
 
             {/* Footer */}
-            <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
+            <Animated.View
+              style={[
+                styles.footer,
+                {
+                  opacity: footerAnim,
+                  transform: [{ translateY: footerAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
+                },
+              ]}
+            >
               <Text style={styles.footerText}>Zaten hesabınız var mı?</Text>
               <TouchableOpacity
                 onPress={() => router.back()}
@@ -221,7 +309,7 @@ export default function RegisterScreen() {
           </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -252,7 +340,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     marginTop: Spacing.sm,
-    alignSelf: 'flex-start',
     paddingVertical: Spacing.sm,
     paddingRight: Spacing.sm,
   },
@@ -266,7 +353,15 @@ const styles = StyleSheet.create({
     marginTop: Spacing.base,
     marginBottom: Spacing.xl,
   },
+  logoWrapper: {
+    width: 92,
+    height: 92,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
   logoMark: {
+    position: 'absolute',
     width: 68,
     height: 68,
     borderRadius: Rounded['2xl'],
@@ -274,7 +369,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...Shadow.primary,
-    marginBottom: Spacing.xs,
   },
   title: {
     ...Typography.h1,
@@ -285,9 +379,47 @@ const styles = StyleSheet.create({
     ...Typography.bodyMedium,
     color: C.textSecondary,
     textAlign: 'center',
+    marginTop: 4,
   },
   form: {
     gap: Spacing.base,
+  },
+  vehicleSection: {
+    gap: Spacing.sm,
+  },
+  vehicleLabel: {
+    ...Typography.label,
+    color: C.text,
+  },
+  vehicleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  vehicleCard: {
+    backgroundColor: C.surface,
+    borderWidth: 1.5,
+    borderColor: C.outlineVariant,
+    borderRadius: Rounded.lg,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    ...Shadow.sm,
+  },
+  vehicleCardSelected: {
+    backgroundColor: C.primaryFixed,
+    borderColor: C.primary,
+  },
+  vehicleName: {
+    ...Typography.caption,
+    color: C.outline,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  vehicleNameSelected: {
+    color: C.primary,
+    fontWeight: '700',
   },
   footer: {
     flexDirection: 'row',
